@@ -1,12 +1,12 @@
 import { Routes, Route } from 'react-router-dom'
+import { InscripcionesPage } from './features/inscripciones/pages/InscripcionesPage'
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Routes>
-        <Route path="/" element={<div className="p-8">Olimpiadas Perú - Frontend</div>} />
-      </Routes>
-    </div>
+    <Routes>
+      <Route path="/" element={<InscripcionesPage />} />
+      <Route path="/inscripciones" element={<InscripcionesPage />} />
+    </Routes>
   )
 }
 
