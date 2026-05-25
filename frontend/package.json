@@ -12,20 +12,22 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.1",
     "@tailwindcss/postcss": "^4.3.0",
-    "@tanstack/react-query": "^5.100.10",
+    "@tanstack/react-query": "^5.100.14",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^6.30.3"
+    "react-router-dom": "^7.15.1"
   },
   "devDependencies": {
-    "@types/react": "^19.2.14",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.14",
+    "postcss": "^8.5.15",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.13"
+    "vite": "^8.0.14"
   }
 }
