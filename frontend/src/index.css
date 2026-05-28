@@ -1,76 +1,47 @@
 @import "tailwindcss";
 
 @theme {
-  --color-on-secondary-fixed: #00174b;
-  --color-tertiary: #000000;
-  --color-outline: #76777d;
-  --color-on-tertiary-fixed-variant: #574425;
-  --color-surface-container: #f0edef;
-  --color-primary-fixed: #dae2fd;
-  --color-secondary-container: #316bf3;
-  --color-on-tertiary-fixed: #271901;
-  --color-error: #ba1a1a;
-  --color-on-error-container: #93000a;
-  --color-secondary-fixed: #dbe1ff;
-  --color-tertiary-fixed-dim: #dec29a;
-  --color-secondary: #0051d5;
-  --color-on-tertiary-container: #98805d;
-  --color-surface-tint: #565e74;
-  --color-surface-container-highest: #e4e2e4;
-  --color-primary: #000000;
-  --color-on-primary: #ffffff;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-dim: #dcd9db;
-  --color-on-secondary-container: #fefcff;
-  --color-outline-variant: #c6c6cd;
-  --color-secondary-fixed-dim: #b4c5ff;
-  --color-surface-variant: #e4e2e4;
-  --color-on-surface-variant: #45464d;
-  --color-surface-bright: #fcf8fa;
-  --color-on-background: #1b1b1d;
-  --color-tertiary-container: #271901;
-  --color-on-error: #ffffff;
-  --color-primary-container: #131b2e;
-  --color-surface: #fcf8fa;
-  --color-on-tertiary: #ffffff;
-  --color-inverse-primary: #bec6e0;
-  --color-surface-container-low: #f6f3f5;
-  --color-inverse-surface: #303032;
-  --color-on-secondary: #ffffff;
-  --color-on-primary-fixed: #131b2e;
-  --color-background: #fcf8fa;
-  --color-on-secondary-fixed-variant: #003ea8;
-  --color-tertiary-fixed: #fcdeb5;
-  --color-on-surface: #1b1b1d;
-  --color-on-primary-container: #7c839b;
-  --color-error-container: #ffdad6;
-  --color-inverse-on-surface: #f3f0f2;
-  --color-primary-fixed-dim: #bec6e0;
-  --color-on-primary-fixed-variant: #3f465c;
-  --color-surface-container-high: #eae7e9;
+  /* Fondos */
+  --color-base:    #F4F6F9;
+  --color-surface: #FFFFFF;
+  --color-panel:   #F0F4FF;
 
-  --font-family-display: "Outfit", sans-serif;
+  /* Sidebar */
+  --color-sidebar: #E2E8F0;
+  --color-sidebar-hover: #CBD5E1;
+  --color-sidebar-active: #D91023;
+  --color-sidebar-text: #334155;
+  --color-sidebar-text-active: #FFFFFF;
+
+  /* Texto */
+  --color-text:    #1A1D2E;
+  --color-muted:   #6B7280;
+  --color-subtle:  #9CA3AF;
+
+  /* Bordes */
+  --color-border:  #E5E7EB;
+
+  /* Acentos */
+  --color-accent:  #D91023;
+  --color-accent-hover: #B50D1C;
+  --color-primary: #1E3A8A;
+  --color-info:    #3B82F6;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-danger:  #EF4444;
+
   --font-family-body: "Inter", sans-serif;
 }
 
-.material-symbols-outlined {
-  font-family: 'Material Symbols Outlined' !important;
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-feature-settings: 'liga';
-  -webkit-font-smoothing: antialiased;
-}
+* { box-sizing: border-box; }
 
 body {
   font-family: "Inter", sans-serif;
+  background-color: #F4F6F9;
+  color: #1A1D2E;
+  -webkit-font-smoothing: antialiased;
 }
 
-.font-display {
-  font-family: "Outfit", sans-serif;
-}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #F4F6F9; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }

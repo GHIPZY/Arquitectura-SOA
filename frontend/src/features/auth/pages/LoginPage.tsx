@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import loginBg from '@/assets/login/login-bg.webp'
+import logo from '@/assets/login/logo.webp'
 
 const EDGE_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/login`
 const MAX_INTENTOS = 5
@@ -73,10 +75,10 @@ export function LoginPage() {
     await supabase.auth.setSession(data.session)
 
     switch (data.rol) {
-      case 'administrador': navigate('/admin'); break
-      case 'coordinador':
-      case 'espectador':
-      default: navigate('/inscripciones')
+      case 'administrador': navigate('/dashboard'); break
+      case 'coordinador': navigate('/equipos'); break
+      case 'espectador': navigate('/encuentros'); break
+      default: navigate('/dashboard')
     }
 
     setLoading(false)
@@ -88,13 +90,13 @@ export function LoginPage() {
     <div className="bg-gray-100 font-sans h-screen w-full overflow-hidden flex flex-col lg:flex-row">
 
       {/* Panel izquierdo */}
-      <aside className="w-full lg:w-[450px] xl:w-[500px] h-full bg-white flex flex-col justify-between relative z-10 shadow-2xl flex-shrink-0">
+      <aside className="w-full lg:w-[520px] xl:w-[580px] h-full bg-white flex flex-col justify-between relative z-10 shadow-2xl flex-shrink-0">
         <div className="flex-grow flex flex-col items-center justify-center px-8 sm:px-12 py-10 w-full max-w-md mx-auto">
 
           {/* Logo */}
           <div className="mb-10 w-48 h-48 flex items-center justify-center">
             <img
-              src="https://lh3.googleusercontent.com/aida/ADBb0ugksdwAcXDDqnC7olyD3nmJbJF-LMLf0NL-E_yNJ6w0bv9P4BOYgcESbIjOF5FKlNRyvcIkkEM2sPS-zUdQNSrsiG6i3DXdgR1kAolWHyVZ8XoYLSslGlbbdAKuoGxU4wmjWBXbkDzJOSUrV8GN4388wORoZVvjR6JG270l1inASIEH6Ewe2rHux9HBTtdrlD0M93_boafaoLUrkKmxOkpsXSuFN1hCXBEqZ_DN2svUqb5RHYzIu9in9B8"
+              src={logo}
               alt="Olimpiadas Perú Logo"
               className="w-full h-auto object-contain"
             />
@@ -117,6 +119,7 @@ export function LoginPage() {
                 onChange={e => setEmail(e.target.value)}
                 placeholder="Usuario / Email"
                 disabled={bloqueado}
+                autoComplete="username"
                 className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-red-600 focus:border-red-600 text-sm text-gray-800 transition-colors disabled:bg-gray-50 disabled:text-gray-400"
               />
             </div>
@@ -135,6 +138,7 @@ export function LoginPage() {
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Contraseña"
                 disabled={bloqueado}
+                autoComplete="current-password"
                 className="pl-10 pr-10 w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-red-600 focus:border-red-600 text-sm text-gray-800 transition-colors disabled:bg-gray-50 disabled:text-gray-400"
               />
               <button
@@ -168,9 +172,8 @@ export function LoginPage() {
                   {Array.from({ length: MAX_INTENTOS }).map((_, i) => (
                     <div
                       key={i}
-                      className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                        i < intentosUsados ? 'bg-red-500' : 'bg-gray-200'
-                      }`}
+                      className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i < intentosUsados ? 'bg-red-500' : 'bg-gray-200'
+                        }`}
                     />
                   ))}
                 </div>
@@ -212,7 +215,7 @@ export function LoginPage() {
 
         {/* Footer */}
         <div className="py-6 px-8 text-center border-t border-gray-100">
-          <p className="text-xs text-gray-500">Solo usuarios autorizados · Olimpiadas Perú 2025</p>
+          <p className="text-xs text-gray-500">Olimpiadas Perú 2026</p>
         </div>
 
         {/* Curva SVG */}
@@ -226,7 +229,7 @@ export function LoginPage() {
       {/* Panel derecho */}
       <main className="hidden lg:block flex-1 relative bg-gray-900 overflow-hidden">
         <img
-          src="https://lh3.googleusercontent.com/aida/ADBb0ugAYwMFKFbNqEFSkFX2-FDoa1Qz-UA2Vvd1IgRSMWjxZjls4wuSdwB69135POHop6SD08rJN1PAeLFPZYEs6E1JyawDYJy0MjkvUsBmB_M8CdmL7veDV2GI_j7v82D43DJE-92Ccsq-grylzKVo8T3WRelPMAS12ABqA13MQ-VnDZHQRpOuInl8XXj18Hj_G7kvuIK4fvUAnqkQTacUq2dQJcIE6W490C34ujC0F_rOR5NeU2zy9R5vj5U"
+          src={loginBg}
           alt="Estadio iluminado de noche"
           className="absolute inset-0 w-full h-full object-cover object-center opacity-90"
         />
@@ -234,7 +237,7 @@ export function LoginPage() {
         <div className="absolute bottom-0 left-0 w-full p-12 pb-16 flex flex-col items-start pl-24 xl:pl-32">
           <div className="w-24 h-24 mb-4 flex items-center justify-center opacity-90 grayscale brightness-200 contrast-200">
             <img
-              src="https://lh3.googleusercontent.com/aida/ADBb0ugksdwAcXDDqnC7olyD3nmJbJF-LMLf0NL-E_yNJ6w0bv9P4BOYgcESbIjOF5FKlNRyvcIkkEM2sPS-zUdQNSrsiG6i3DXdgR1kAolWHyVZ8XoYLSslGlbbdAKuoGxU4wmjWBXbkDzJOSUrV8GN4388wORoZVvjR6JG270l1inASIEH6Ewe2rHux9HBTtdrlD0M93_boafaoLUrkKmxOkpsXSuFN1hCXBEqZ_DN2svUqb5RHYzIu9in9B8"
+              src={logo}
               alt="Olimpiadas Perú Logo"
               className="w-full h-auto object-contain"
             />

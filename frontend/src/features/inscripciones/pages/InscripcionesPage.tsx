@@ -72,7 +72,7 @@ export function InscripcionesPage() {
   };
 
   return (
-    <MainLayout>
+    <MainLayout title="Inscripciones">
       <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>

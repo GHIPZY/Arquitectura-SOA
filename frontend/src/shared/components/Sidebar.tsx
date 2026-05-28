@@ -1,233 +1,143 @@
-const navItems = [
-  { icon: 'dashboard', label: 'Dashboard', href: '#' },
-  { icon: 'how_to_reg', label: 'Inscripciones', href: '#', active: true },
-  { icon: 'groups', label: 'Equipos', href: '#' },
-  { icon: 'sports_soccer', label: 'Partidos', href: '#' },
-  { icon: 'leaderboard', label: 'Resultados', href: '#' },
-  { icon: 'table_chart', label: 'Tabla', href: '#' },
-  { icon: 'insights', label: 'Estadísticas', href: '#' },
-];
+import { useState, useRef, useEffect } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Calendar, LogOut, User, Settings, ChevronDown } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { useCurrentUser, type Rol } from '@/shared/context/UserContext'
+import logo from '@/assets/login/logo.webp'
 
-const bottomNavItems = [
-  { icon: 'settings', label: 'Configuración', href: '#' },
-  { icon: 'logout', label: 'Cerrar Sesión', href: '#' },
-];
+import inicioIcon from '@/assets/icons/slide/inicio.png'
+import equipoIcon from '@/assets/icons/slide/equipo.png'
+
+const NAV_ITEMS: { icon: React.ElementType | string; label: string; to: string; roles: Rol[] }[] = [
+  { icon: inicioIcon, label: 'Inicio',      to: '/dashboard',   roles: ['administrador', 'coordinador'] },
+  { icon: equipoIcon, label: 'Mis Equipos', to: '/equipos',     roles: ['administrador', 'coordinador'] },
+  { icon: Calendar,   label: 'Encuentros',  to: '/encuentros',  roles: ['administrador', 'coordinador', 'espectador'] },
+]
 
 export function Sidebar() {
+  const navigate = useNavigate()
+  const { user } = useCurrentUser()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const items = user
+    ? NAV_ITEMS.filter(item => item.roles.includes(user.rol))
+    : []
+
+  // Cierra al hacer clic fuera
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    navigate('/login')
+  }
+
   return (
-    <aside
-      className="
-        fixed
-        left-0
-        top-0
-        z-40
-        w-64
-        h-screen
-        flex
-        flex-col
-        bg-primary-container
-        border-r
-        border-outline-variant/20
-        shadow-xl
-        backdrop-blur-xl
-      "
-    >
+    <aside className="fixed left-0 top-0 z-40 w-56 h-screen flex flex-col bg-sidebar border-r border-slate-300">
+
       {/* Logo */}
-      <div className="px-6 py-8 border-b border-outline-variant/10">
-        <div className="flex items-center">
-          <div
-            className="
-              w-12
-              h-12
-              rounded-2xl
-              bg-secondary
-              text-on-secondary
-              flex
-              items-center
-              justify-center
-              shadow-md
-              mr-4
-            "
-          >
-            <span className="material-symbols-outlined text-2xl">
-              emoji_events
-            </span>
-          </div>
-
-          <div>
-            <h1 className="text-xl font-bold text-on-primary">
-              Olimpiadas Perú
-            </h1>
-
-            <p className="text-sm text-on-primary-container opacity-70">
-              Admin Console
-            </p>
-          </div>
-        </div>
+      <div className="px-5 py-6 flex flex-col items-center border-b border-slate-300">
+        <img src={logo} alt="Olimpiadas Perú Logo" className="w-32 h-auto object-contain" />
       </div>
 
-      {/* Navegación */}
-      <nav className="flex-1 px-3 py-5 overflow-y-auto">
-        <div className="space-y-1">
-          {navItems.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              className={`
-                group
-                relative
-                flex
-                items-center
-                px-4
-                py-3
-                rounded-2xl
-                transition-all
-                duration-300
-                overflow-hidden
-                ${
-                  item.active
-                    ? `
-                      bg-secondary
-                      text-on-secondary
-                      shadow-md
-                    `
-                    : `
-                      text-on-primary-container
-                      hover:bg-on-primary-container/10
-                      hover:text-on-primary
-                    `
-                }
-              `}
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        {items.map(({ icon, label, to }) => {
+          const Icon = icon
+          const isPng = typeof Icon === 'string'
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
+                  isActive
+                    ? 'bg-sidebar-active text-white'
+                    : 'text-sidebar-text hover:bg-sidebar-hover hover:text-slate-900'
+                }`
+              }
             >
-              {/* Indicador lateral */}
-              {item.active && (
-                <div
-                  className="
-                    absolute
-                    left-0
-                    top-2
-                    bottom-2
-                    w-1
-                    rounded-r-full
-                    bg-white
-                  "
-                />
+              {({ isActive }) => (
+                <>
+                  {isPng ? (
+                    <img
+                      src={Icon as string}
+                      alt={label}
+                      className={`w-4 h-4 object-contain transition-all ${
+                        isActive ? 'brightness-0 invert' : 'opacity-70 group-hover:opacity-100'
+                      }`}
+                    />
+                  ) : (
+                    <Icon size={16} className={isActive ? 'text-white' : 'text-sidebar-text group-hover:text-slate-900'} />
+                  )}
+                  {label}
+                </>
               )}
-
-              {/* Icono */}
-              <span
-                className="
-                  material-symbols-outlined
-                  text-[22px]
-                  mr-4
-                  transition-transform
-                  duration-300
-                  group-hover:scale-110
-                "
-              >
-                {item.icon}
-              </span>
-
-              {/* Texto */}
-              <span className="font-medium text-sm">
-                {item.label}
-              </span>
-            </a>
-          ))}
-        </div>
-
-        {/* Bottom nav */}
-        <div className="mt-6 pt-6 border-t border-outline-variant/10 space-y-1">
-          {bottomNavItems.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              className="
-                flex
-                items-center
-                px-4
-                py-3
-                rounded-2xl
-                text-on-primary-container
-                transition-all
-                duration-300
-                hover:bg-on-primary-container/10
-                hover:text-on-primary
-                group
-              "
-            >
-              <span
-                className="
-                  material-symbols-outlined
-                  text-[22px]
-                  mr-4
-                  transition-transform
-                  duration-300
-                  group-hover:scale-110
-                "
-              >
-                {item.icon}
-              </span>
-
-              <span className="font-medium text-sm">
-                {item.label}
-              </span>
-            </a>
-          ))}
-        </div>
+            </NavLink>
+          )
+        })}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-outline-variant/10">
-        <button
-          className="
-            w-full
-            py-4
-            rounded-2xl
-            bg-secondary
-            text-on-secondary
-            font-bold
-            shadow-lg
-            transition-all
-            duration-300
-            hover:scale-[1.02]
-            hover:shadow-xl
-            active:scale-95
-          "
-        >
-          Ruleta de Países
-        </button>
+      {/* Usuario con dropdown */}
+      <div ref={ref} className="p-3 border-t border-slate-300 relative">
 
-        {/* Usuario */}
-        <div className="mt-4 flex items-center px-2">
-          <div
-            className="
-              w-10
-              h-10
-              rounded-full
-              bg-secondary-container
-              flex
-              items-center
-              justify-center
-              font-bold
-              text-on-secondary-container
-              mr-3
-            "
-          >
-            PB
+        {/* Dropdown — aparece arriba */}
+        <div className={`absolute bottom-full left-3 right-3 mb-2 bg-white rounded-xl shadow-xl border border-border overflow-hidden transition-all duration-200 ease-out origin-bottom ${
+          open ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-y-95 translate-y-2 pointer-events-none'
+        }`}>
+          {/* Info usuario */}
+          <div className="px-4 py-3 border-b border-border">
+            <p className="text-sm font-semibold text-text truncate">{user?.nombre ?? '...'}</p>
+            <p className="text-[10px] text-muted capitalize">{user?.rol ?? ''}</p>
           </div>
-
-          <div>
-            <p className="text-sm font-semibold text-on-primary">
-              Pierre
-            </p>
-
-            <p className="text-xs text-on-primary-container opacity-70">
-              Administrador
-            </p>
+          {/* Opciones */}
+          <div className="p-1.5 space-y-0.5">
+            <button
+              disabled
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted cursor-not-allowed opacity-50"
+            >
+              <User size={14} /> Mi perfil
+            </button>
+            <button
+              disabled
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted cursor-not-allowed opacity-50"
+            >
+              <Settings size={14} /> Configuración
+            </button>
+            <div className="my-1 border-t border-border" />
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+            >
+              <LogOut size={14} /> Cerrar sesión
+            </button>
           </div>
         </div>
+
+        {/* Botón toggle */}
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-sidebar-hover transition-colors group cursor-pointer"
+        >
+          <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            {user?.iniciales ?? '??'}
+          </div>
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-slate-900 text-xs font-semibold truncate">{user?.nombre ?? '...'}</p>
+            <p className="text-sidebar-text text-[10px] capitalize truncate">{user?.rol ?? ''}</p>
+          </div>
+          <ChevronDown
+            size={14}
+            className={`text-sidebar-text transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
       </div>
     </aside>
-  );
+  )
 }

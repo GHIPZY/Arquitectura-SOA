@@ -1,36 +1,24 @@
-import { ReactNode } from 'react';
-import { Sidebar } from '@/shared/components/Sidebar';
-import { TopBar } from '@/shared/components/TopBar';
+import { ReactNode } from 'react'
+import { Sidebar } from '@/shared/components/Sidebar'
+import { TopBar } from '@/shared/components/TopBar'
 
 interface MainLayoutProps {
-  children: ReactNode;
+  children: ReactNode
+  title: string
+  subtitle?: string
+  extra?: React.ReactNode
 }
 
-export function MainLayout({ children }: MainLayoutProps) {
+export function MainLayout({ children, title, subtitle, extra }: MainLayoutProps) {
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-base flex">
       <Sidebar />
-
-      {/* Contenido principal */}
-      <div className="flex-1 flex flex-col ml-64 min-h-screen">
-        {/* TopBar */}
-        <TopBar />
-
-        {/* Contenido dinámico */}
-        <main
-          className="
-            flex-1
-            p-6
-            overflow-y-auto
-            bg-background
-          "
-        >
-          <div className="max-w-[1600px] mx-auto">
-            {children}
-          </div>
+      <div className="flex-1 flex flex-col ml-56 min-h-screen">
+        <TopBar title={title} subtitle={subtitle} extra={extra} />
+        <main className="flex-1 p-6 overflow-y-auto">
+          {children}
         </main>
       </div>
     </div>
-  );
+  )
 }
