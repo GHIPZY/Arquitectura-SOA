@@ -8,7 +8,9 @@ export interface CurrentUser {
   email: string
   nombre: string
   rol: Rol
-  institucion: string | null
+  institucion_id: string | null
+  grado_id: string | null
+  grado: string | null
   iniciales: string
 }
 
@@ -37,7 +39,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const { data, error } = await supabase
       .from('usuarios')
-      .select('nombre, rol')
+      .select('nombre, rol, grado_id, institucion_id, grados(nombre)')
       .eq('id', session.user.id)
       .single()
 
@@ -48,7 +50,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         email,
         nombre: email.split('@')[0],
         rol: 'coordinador',
-        institucion: null,
+        institucion_id: null,
+        grado_id: null,
+        grado: null,
         iniciales: email.slice(0, 2).toUpperCase(),
       })
       setLoading(false)
@@ -56,12 +60,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     const nombre = (data.nombre as string | null) ?? session.user.email ?? 'Usuario'
+    const gradoData = data.grados as { nombre: string } | null
     setUser({
       id: session.user.id,
       email: session.user.email ?? '',
       nombre,
       rol: data.rol as Rol,
-      institucion: null,
+      institucion_id: (data.institucion_id as string | null) ?? null,
+      grado_id: (data.grado_id as string | null) ?? null,
+      grado: gradoData?.nombre ?? null,
       iniciales: makeIniciales(nombre),
     })
     setLoading(false)

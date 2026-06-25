@@ -195,7 +195,7 @@ export function SorteoStage({ onClose, onConfirm, currentCountry }: SorteoStageP
               </p>
             ) : (
               <p className="text-neutral-500 text-xs md:text-sm leading-relaxed max-w-sm mx-auto animate-[fadeUp_500ms_300ms_backwards]">
-                ¡Tu institución representará oficialmente a este país en todas las competencias!
+                ¡Tu grado representará oficialmente a este país en todas las competencias!
               </p>
             )}
           </div>

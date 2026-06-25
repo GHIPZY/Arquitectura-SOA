@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { MainLayout } from '@/layouts/MainLayout'
-import { MapPin, ChevronDown } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { BanderaPais } from '@/shared/components/BanderaPais'
 import { supabase } from '@/lib/supabase'
 
@@ -16,10 +16,9 @@ interface Encuentro {
   id: string
   fecha_hora: string
   estado: Estado
-  estadio: string | null
   deportes: { nombre: string } | null
-  equipo_local: { nombre_equipo: string; instituciones: { nombre: string; pais_asignado: string } | null } | null
-  equipo_visitante: { nombre_equipo: string; instituciones: { nombre: string; pais_asignado: string } | null } | null
+  equipo_local: { nombre_equipo: string; grados: { nombre: string; pais_asignado: string } | null } | null
+  equipo_visitante: { nombre_equipo: string; grados: { nombre: string; pais_asignado: string } | null } | null
   resultado: { puntos_local: number; puntos_visitante: number } | null
 }
 
@@ -75,7 +74,7 @@ export function EncuentrosPage() {
 
       let query = supabase
         .from('encuentros')
-        .select('id, fecha_hora, estado, estadio, deporte_id, equipo_local_id, equipo_visitante_id')
+        .select('id, fecha_hora, estado, deporte_id, equipo_local_id, equipo_visitante_id')
         .order('fecha_hora', { ascending: true })
 
       if (deporteId !== 'todos') query = query.eq('deporte_id', deporteId)
@@ -95,7 +94,7 @@ export function EncuentrosPage() {
 
       const [equiposRes, deportesRes, resultadosRes] = await Promise.all([
         equipoIds.length > 0
-          ? supabase.from('equipos').select('id, nombre_equipo, instituciones ( nombre, pais_asignado )').in('id', equipoIds)
+          ? supabase.from('equipos').select('id, nombre_equipo, grados ( nombre, pais_asignado )').in('id', equipoIds)
           : Promise.resolve({ data: [] }),
         deporteIds.length > 0
           ? supabase.from('deportes').select('id, nombre').in('id', deporteIds)
@@ -103,11 +102,11 @@ export function EncuentrosPage() {
         supabase.from('resultados').select('encuentro_id, puntos_local, puntos_visitante').in('encuentro_id', encuentroIds),
       ])
 
-      const equiposMap: Record<string, { nombre_equipo: string; instituciones: { nombre: string; pais_asignado: string } | null }> = {}
+      const equiposMap: Record<string, { nombre_equipo: string; grados: { nombre: string; pais_asignado: string } | null }> = {}
       for (const eq of (equiposRes.data ?? []) as any[]) {
         equiposMap[eq.id] = {
           nombre_equipo: eq.nombre_equipo,
-          instituciones: eq.instituciones ?? null,
+          grados: eq.grados ?? null,
         }
       }
 
@@ -121,7 +120,6 @@ export function EncuentrosPage() {
         id: e.id,
         fecha_hora: e.fecha_hora,
         estado: e.estado,
-        estadio: e.estadio,
         deportes: e.deporte_id ? { nombre: deportesMap[e.deporte_id] ?? '' } : null,
         equipo_local:     e.equipo_local_id     ? (equiposMap[e.equipo_local_id]     ?? null) : null,
         equipo_visitante: e.equipo_visitante_id ? (equiposMap[e.equipo_visitante_id] ?? null) : null,
@@ -202,7 +200,7 @@ export function EncuentrosPage() {
           <table className="w-full">
             <thead className="bg-base border-b border-border">
               <tr>
-                {['Fecha y Hora', 'Local', 'vs', 'Visitante', 'Deporte', 'Estado', 'Estadio'].map(h => (
+                {['Fecha y Hora', 'Local', 'vs', 'Visitante', 'Deporte', 'Estado'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted">{h}</th>
                 ))}
               </tr>
@@ -211,8 +209,8 @@ export function EncuentrosPage() {
               {encuentros.map(e => {
                 const { dia, mes, hora } = formatFecha(e.fecha_hora)
                 const resultado = e.resultado
-                const codigoL = e.equipo_local?.instituciones?.pais_asignado ?? ''
-                const codigoV = e.equipo_visitante?.instituciones?.pais_asignado ?? ''
+                const codigoL = e.equipo_local?.grados?.pais_asignado ?? ''
+                const codigoV = e.equipo_visitante?.grados?.pais_asignado ?? ''
                 const nombreL = e.equipo_local?.nombre_equipo ?? '—'
                 const nombreV = e.equipo_visitante?.nombre_equipo ?? '—'
                 return (
@@ -247,12 +245,6 @@ export function EncuentrosPage() {
                       <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${ESTADO_CFG[e.estado].cls}`}>
                         {ESTADO_CFG[e.estado].label}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 text-muted">
-                        <MapPin size={12} className="flex-shrink-0" />
-                        <span className="text-xs">{e.estadio ?? '—'}</span>
-                      </div>
                     </td>
                   </tr>
                 )

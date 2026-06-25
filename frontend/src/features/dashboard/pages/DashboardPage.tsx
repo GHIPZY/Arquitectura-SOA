@@ -15,8 +15,8 @@ interface EncuentroHoy {
   fecha_hora: string
   estado: string
   deportes: { nombre: string } | null
-  equipo_local: { instituciones: { nombre: string } | null } | null
-  equipo_visitante: { instituciones: { nombre: string } | null } | null
+  equipo_local: { grados: { nombre: string } | null } | null
+  equipo_visitante: { grados: { nombre: string } | null } | null
   resultados: { puntos_local: number; puntos_visitante: number }[] | null
 }
 
@@ -60,8 +60,8 @@ export function DashboardPage() {
       const { data } = await supabase
         .from('encuentros')
         .select(`id, fecha_hora, estado, deportes(nombre),
-          equipo_local:equipos!equipo_local_id(instituciones(nombre)),
-          equipo_visitante:equipos!equipo_visitante_id(instituciones(nombre)),
+          equipo_local:equipos!equipo_local_id(grados(nombre)),
+          equipo_visitante:equipos!equipo_visitante_id(grados(nombre)),
           resultados(puntos_local, puntos_visitante)`)
         .gte('fecha_hora', inicio).lt('fecha_hora', fin)
         .order('fecha_hora', { ascending: true }).limit(6)
@@ -133,8 +133,8 @@ export function DashboardPage() {
                 {encuentrosHoy.map(e => {
                   const hora = new Date(e.fecha_hora).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
                   const resultado = e.resultados?.[0]
-                  const nombreL = e.equipo_local?.instituciones?.nombre ?? '—'
-                  const nombreV = e.equipo_visitante?.instituciones?.nombre ?? '—'
+                  const nombreL = e.equipo_local?.grados?.nombre ?? '—'
+                  const nombreV = e.equipo_visitante?.grados?.nombre ?? '—'
                   return (
                     <tr key={e.id} className="hover:bg-base/50 transition-colors">
                       <td className="px-4 py-3 text-xs text-muted font-medium">{hora}</td>
@@ -205,6 +205,12 @@ export function DashboardPage() {
                 <span className="text-xs text-muted">Tu rol</span>
                 <span className="text-xs font-medium text-text capitalize">{user?.rol ?? '—'}</span>
               </div>
+              {user?.rol === 'coordinador' && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted">Tu grado</span>
+                  <span className="text-xs font-medium text-text">{user.grado ?? '—'}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

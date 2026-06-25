@@ -20,7 +20,7 @@ app.get('/equipos', requireAuth as any, async (req: AuthenticatedRequest, res: R
   if (id) {
     const { data, error } = await supabaseAdmin
       .from('equipos')
-      .select('*, instituciones(id, nombre, pais_asignado, logo_url), deportes(id, nombre, categoria, max_participantes)')
+      .select('*, grados(id, nombre, pais_asignado, institucion_id), deportes(id, nombre, categoria, max_participantes)')
       .eq('id', id)
       .single()
     if (error) return res.status(404).json({ error: error.message })
@@ -29,7 +29,7 @@ app.get('/equipos', requireAuth as any, async (req: AuthenticatedRequest, res: R
 
   let query = supabaseAdmin
     .from('equipos')
-    .select('*, instituciones(id, nombre, pais_asignado, logo_url), deportes(id, nombre, categoria, max_participantes)')
+    .select('*, grados(id, nombre, pais_asignado, institucion_id), deportes(id, nombre, categoria, max_participantes)')
     .order('created_at', { ascending: false })
 
   if (deporte_id)    query = query.eq('deporte_id', deporte_id)

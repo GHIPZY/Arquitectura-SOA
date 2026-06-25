@@ -8,24 +8,23 @@ import { DadosAnimation } from '@/shared/components/DadosAnimation'
 import { supabase } from '@/lib/supabase'
 import { useCurrentUser } from '@/shared/context/UserContext'
 
-// ─────────────────────────────────────────────
 // Constantes
-// ─────────────────────────────────────────────
+
 
 const DEPORTES = [
-  { key: 'futbol',    label: 'Fútbol',        emoji: '⚽', min: 11, max: 18 },
-  { key: 'voley',     label: 'Vóley',         emoji: '🏐', min: 6,  max: 12 },
-  { key: 'basquet',   label: 'Básquetbol',    emoji: '🏀', min: 8,  max: 15 },
-  { key: 'atletismo', label: 'Atletismo',     emoji: '🏃', min: 1,  max: 6  },
-  { key: 'pingpong',  label: 'Tenis de Mesa', emoji: '🏓', min: 2,  max: 4  },
+  { key: 'futbol', label: 'Fútbol', emoji: '⚽', min: 11, max: 18 },
+  { key: 'voley', label: 'Vóley', emoji: '🏐', min: 6, max: 12 },
+  { key: 'basquet', label: 'Básquetbol', emoji: '🏀', min: 8, max: 15 },
+  { key: 'atletismo', label: 'Atletismo', emoji: '🏃', min: 1, max: 6 },
+  { key: 'pingpong', label: 'Tenis de Mesa', emoji: '🏓', min: 2, max: 4 },
 ]
 
 const POSICIONES_POR_DEPORTE: Record<string, string[]> = {
-  futbol:    ['Arquero', 'Defensa Central', 'Lateral Derecho', 'Lateral Izquierdo', 'Mediocampista Defensivo', 'Mediocampista Central', 'Mediocampista Ofensivo', 'Extremo Derecho', 'Extremo Izquierdo', 'Delantero Centro', 'Segunda Punta'],
-  voley:     ['Colocador', 'Opuesto', 'Central', 'Receptor Derecho', 'Receptor Izquierdo', 'Libero'],
-  basquet:   ['Base', 'Escolta', 'Alero', 'Ala-Pívot', 'Pívot'],
+  futbol: ['Arquero', 'Defensa Central', 'Lateral Derecho', 'Lateral Izquierdo', 'Mediocampista Defensivo', 'Mediocampista Central', 'Mediocampista Ofensivo', 'Extremo Derecho', 'Extremo Izquierdo', 'Delantero Centro', 'Segunda Punta'],
+  voley: ['Colocador', 'Opuesto', 'Central', 'Receptor Derecho', 'Receptor Izquierdo', 'Libero'],
+  basquet: ['Base', 'Escolta', 'Alero', 'Ala-Pívot', 'Pívot'],
   atletismo: ['Velocista 100m', 'Velocista 200m', 'Velocista 400m', 'Fondista', 'Saltador de Altura', 'Saltador de Longitud', 'Lanzador', 'Marchista'],
-  pingpong:  ['Jugador'],
+  pingpong: ['Jugador'],
 }
 
 
@@ -43,8 +42,8 @@ function getDeporteIcon(key: string): string | undefined {
 }
 
 const API = {
-  deportes:      '/api/deportes',
-  equipos:       '/api/equipos',
+  deportes: '/api/deportes',
+  equipos: '/api/equipos',
   participantes: '/api/participantes',
 }
 
@@ -52,14 +51,14 @@ const API = {
 // Tipos
 // ─────────────────────────────────────────────
 
-type Jugador     = { id: string; nombre: string; dni: string; posicion: string }
+type Jugador = { id: string; nombre: string; dni: string; posicion: string }
 type EquipoLocal = { deporteKey: string; equipoId: string | null; jugadores: Jugador[] }
 
 type PageData = {
-  paisAsignado:  { pais: string; codigo: string } | null
-  institucionId: string | null
-  deportesDB:    Record<string, string>   // deporteKey → UUID en BD
-  equipos:       EquipoLocal[]
+  paisAsignado: { pais: string; codigo: string } | null
+  gradoId: string | null
+  deportesDB: Record<string, string>   // deporteKey → UUID en BD
+  equipos: EquipoLocal[]
 }
 
 // ─────────────────────────────────────────────
@@ -69,10 +68,10 @@ type PageData = {
 function matchDeporteKey(nombre: string): string | null {
   const n = nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   if (n.includes('futbol') || n.includes('football') || n.includes('soccer')) return 'futbol'
-  if (n.includes('voley') || n.includes('volleyball'))                          return 'voley'
-  if (n.includes('basquet') || n.includes('basketball'))                        return 'basquet'
-  if (n.includes('atletismo') || n.includes('athletics'))                       return 'atletismo'
-  if (n.includes('tenis') || n.includes('ping') || n.includes('mesa'))         return 'pingpong'
+  if (n.includes('voley') || n.includes('volleyball')) return 'voley'
+  if (n.includes('basquet') || n.includes('basketball')) return 'basquet'
+  if (n.includes('atletismo') || n.includes('athletics')) return 'atletismo'
+  if (n.includes('tenis') || n.includes('ping') || n.includes('mesa')) return 'pingpong'
   return null
 }
 
@@ -84,41 +83,38 @@ async function authHeaders(): Promise<Record<string, string>> {
   }
 }
 
-// ─────────────────────────────────────────────
-// Fetch principal (fuera del componente para estabilidad)
-// ─────────────────────────────────────────────
-
+//Lectura de participantes
 async function fetchPageData(userId: string): Promise<PageData> {
   // 1. Institución del usuario
   const { data: usr } = await supabase
-    .from('usuarios').select('institucion_id').eq('id', userId).single()
-  if (!usr?.institucion_id) {
-    return { paisAsignado: null, institucionId: null, deportesDB: {}, equipos: [] }
+    .from('usuarios').select('grado_id').eq('id', userId).single()
+  if (!usr?.grado_id) {
+    return { paisAsignado: null, gradoId: null, deportesDB: {}, equipos: [] }
   }
-  const instId = usr.institucion_id as string
+  const gradoId = usr.grado_id as string
 
   // 2. Todo en paralelo: país, deportes, equipos
   const hdr = await authHeaders()
-  const [instRes, depsRes, equiposRes] = await Promise.all([
-    supabase.from('instituciones').select('pais_asignado').eq('id', instId).single(),
+  const [gradoRes, depsRes, equiposRes] = await Promise.all([
+    supabase.from('grados').select('pais_asignado').eq('id', gradoId).single(),
     fetch(API.deportes + '/deportes', { headers: hdr }).then(r => r.ok ? r.json() : []).catch(() => []),
-    supabase.from('equipos').select('id, deporte_id, deportes(nombre)').eq('institucion_id', instId),
+    supabase.from('equipos').select('id, deporte_id, deportes(nombre)').eq('grado_id', gradoId),
   ])
 
   // País
   let paisAsignado: PageData['paisAsignado'] = null
-  if (instRes.data?.pais_asignado) {
+  if (gradoRes.data?.pais_asignado) {
     const { data: gp } = await supabase
-      .from('grados_paises').select('pais, codigo').eq('pais', instRes.data.pais_asignado).single()
+      .from('grados_paises').select('pais, codigo').eq('pais', gradoRes.data.pais_asignado).single()
     if (gp) paisAsignado = gp as { pais: string; codigo: string }
   }
 
   // Deportes map
   const deportesDB: Record<string, string> = {}
-  ;(depsRes as { id: string; nombre: string }[]).forEach(d => {
-    const key = matchDeporteKey(d.nombre)
-    if (key) deportesDB[key] = d.id
-  })
+    ; (depsRes as { id: string; nombre: string }[]).forEach(d => {
+      const key = matchDeporteKey(d.nombre)
+      if (key) deportesDB[key] = d.id
+    })
 
   // Equipos + participantes en paralelo
   const equiposData = equiposRes.data ?? []
@@ -147,7 +143,7 @@ async function fetchPageData(userId: string): Promise<PageData> {
       })
   ).then(r => r.filter((e) => e !== null) as EquipoLocal[])
 
-  return { paisAsignado, institucionId: instId, deportesDB, equipos }
+  return { paisAsignado, gradoId, deportesDB, equipos }
 }
 
 // ─────────────────────────────────────────────
@@ -176,10 +172,10 @@ export function EquiposPage() {
     )
   }
 
-  const paisAsignado  = data?.paisAsignado  ?? null
-  const institucionId = data?.institucionId ?? null
-  const deportesDB    = data?.deportesDB    ?? {}
-  const equipos       = data?.equipos       ?? []
+  const paisAsignado = data?.paisAsignado ?? null
+  const gradoId = data?.gradoId ?? null
+  const deportesDB = data?.deportesDB ?? {}
+  const equipos = data?.equipos ?? []
 
   // ── Selección pendiente (local, no persiste hasta "Guardar") ──
   const [deportesPendientes, setDeportesPendientes] = useState<string[] | null>(null)
@@ -192,25 +188,25 @@ export function EquiposPage() {
     }
   }, [data])
 
-  const deportesPend    = deportesPendientes ?? []
-  const deportesEnBD    = equipos.map(e => e.deporteKey)
-  const deportesAgregados  = deportesPend.filter(k => !deportesEnBD.includes(k))
+  const deportesPend = deportesPendientes ?? []
+  const deportesEnBD = equipos.map(e => e.deporteKey)
+  const deportesAgregados = deportesPend.filter(k => !deportesEnBD.includes(k))
   const deportesEliminados = deportesEnBD.filter(k => !deportesPend.includes(k))
   const hasCambios = deportesAgregados.length > 0 || deportesEliminados.length > 0
 
   // UI state (no necesita persistir)
   const [showRuleta, setShowRuleta] = useState(false)
-  const [expandido, setExpandido]   = useState<string | null>(null)
-  const [guardando, setGuardando]   = useState(false)
+  const [expandido, setExpandido] = useState<string | null>(null)
+  const [guardando, setGuardando] = useState(false)
 
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)  // jugador id
 
-  const [showForm, setShowForm]   = useState<string | null>(null)
+  const [showForm, setShowForm] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [nombre, setNombre]       = useState('')
-  const [dni, setDni]             = useState('')
-  const [posicion, setPosicion]   = useState('')
-  const [saving, setSaving]       = useState(false)
+  const [nombre, setNombre] = useState('')
+  const [dni, setDni] = useState('')
+  const [posicion, setPosicion] = useState('')
+  const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
   // ── Sorteo ──────────────────────────────────
@@ -230,13 +226,13 @@ export function EquiposPage() {
     if (!yaSeleccionado) setExpandido(key)
     else {
       if (expandido === key) setExpandido(null)
-      if (showForm === key)  { resetForm(); setShowForm(null) }
+      if (showForm === key) { resetForm(); setShowForm(null) }
     }
   }
 
   // ── Guardar selección de deportes ───────────
   async function guardarSeleccion() {
-    if (!institucionId) return
+    if (!gradoId) return
     setGuardando(true)
     const hdr = await authHeaders()
 
@@ -266,10 +262,10 @@ export function EquiposPage() {
         const res = await fetch(API.equipos + '/equipos', {
           method: 'POST', headers: hdr,
           body: JSON.stringify({
-            deporte_id:     deporteIdEnBD,
-            institucion_id: institucionId,
-            nombre_equipo:  `Equipo ${deporte.label} - ${user?.nombre ?? 'Institución'}`,
-            estado:         'inscrito',
+            deporte_id: deporteIdEnBD,
+            grado_id: gradoId,
+            nombre_equipo: `Equipo ${deporte.label} - ${user?.nombre ?? 'Grado'}`,
+            estado: 'inscrito',
           }),
         })
         const json = await res.json()
@@ -319,9 +315,9 @@ export function EquiposPage() {
 
   // ── Guardar jugador ───────────────────────────
   async function guardarJugador(deporteKey: string) {
-    if (!nombre.trim())                   { setFormError('El nombre completo es requerido.'); return }
-    if (!/^\d{8}$/.test(dni))             { setFormError('El DNI debe tener exactamente 8 dígitos.'); return }
-    if (!posicion)                                 { setFormError('Selecciona una posición.'); return }
+    if (!nombre.trim()) { setFormError('El nombre completo es requerido.'); return }
+    if (!/^\d{8}$/.test(dni)) { setFormError('El DNI debe tener exactamente 8 dígitos.'); return }
+    if (!posicion) { setFormError('Selecciona una posición.'); return }
 
     setFormError(''); setSaving(true)
     const equipo = getEquipo(deporteKey)
@@ -379,7 +375,7 @@ export function EquiposPage() {
     try {
       const headers = await authHeaders()
       await fetch(`${API.participantes}/participantes/${id}`, { method: 'DELETE', headers })
-    } catch { /* silencioso */ }
+    } catch { /* Sin catch */ }
   }
 
   // ─────────────────────────────────────────────
@@ -460,13 +456,12 @@ export function EquiposPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
               {DEPORTES.map(d => {
                 const activo = deportesPend.includes(d.key)
-                const icon   = getDeporteIcon(d.key)
+                const icon = getDeporteIcon(d.key)
                 return (
                   <button key={d.key} onClick={() => toggleDeporte(d.key)}
-                    className={`relative flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all cursor-pointer group text-center ${
-                      activo ? 'border-primary bg-primary/[0.01] shadow-[0_4px_12px_rgba(30,58,138,0.04)]'
-                             : 'border-neutral-200/80 bg-white hover:border-neutral-300 hover:shadow-sm'
-                    }`}
+                    className={`relative flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all cursor-pointer group text-center ${activo ? 'border-primary bg-primary/[0.01] shadow-[0_4px_12px_rgba(30,58,138,0.04)]'
+                        : 'border-neutral-200/80 bg-white hover:border-neutral-300 hover:shadow-sm'
+                      }`}
                   >
                     {activo && (
                       <div className="absolute top-3 right-3 w-5 h-5 bg-primary text-white rounded-full flex items-center justify-center shadow-sm">
@@ -513,11 +508,11 @@ export function EquiposPage() {
             <h2 className="text-sm font-bold text-text">2. Equipos e integrantes</h2>
 
             {deportesPend.map((key: string) => {
-              const deporte  = DEPORTES.find(d => d.key === key)!
-              const equipo   = getEquipo(key)
-              const abierto  = expandido === key
+              const deporte = DEPORTES.find(d => d.key === key)!
+              const equipo = getEquipo(key)
+              const abierto = expandido === key
               const { jugadores } = equipo
-              const valido   = jugadores.length >= deporte.min && jugadores.length <= deporte.max
+              const valido = jugadores.length >= deporte.min && jugadores.length <= deporte.max
               const posicionesDeporte = POSICIONES_POR_DEPORTE[key] ?? []
 
               return (
@@ -698,9 +693,8 @@ export function EquiposPage() {
                           <span className={`w-1.5 h-1.5 rounded-full ${jugadores.length < deporte.min ? 'bg-amber-500' : 'bg-green-500'}`} />
                           <span className="text-[11px] font-medium">Requisito de la disciplina: Mínimo {deporte.min} y Máximo {deporte.max} jugadores.</span>
                         </div>
-                        <span className={`text-[11px] font-bold ${
-                          jugadores.length < deporte.min ? 'text-amber-600' : 'text-green-600'
-                        }`}>
+                        <span className={`text-[11px] font-bold ${jugadores.length < deporte.min ? 'text-amber-600' : 'text-green-600'
+                          }`}>
                           Registrados: {jugadores.length} de {deporte.max}
                         </span>
                       </div>

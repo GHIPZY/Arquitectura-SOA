@@ -95,6 +95,9 @@ export function Sidebar() {
           <div className="px-4 py-3 border-b border-border">
             <p className="text-sm font-semibold text-text truncate">{user?.nombre ?? '...'}</p>
             <p className="text-[10px] text-muted capitalize">{user?.rol ?? ''}</p>
+            {user?.rol === 'coordinador' && user.grado && (
+              <p className="text-[10px] text-primary font-semibold mt-0.5">{user.grado}</p>
+            )}
           </div>
           {/* Opciones */}
           <div className="p-1.5 space-y-0.5">
@@ -130,7 +133,9 @@ export function Sidebar() {
           </div>
           <div className="flex-1 text-left min-w-0">
             <p className="text-slate-900 text-xs font-semibold truncate">{user?.nombre ?? '...'}</p>
-            <p className="text-sidebar-text text-[10px] capitalize truncate">{user?.rol ?? ''}</p>
+            <p className="text-sidebar-text text-[10px] capitalize truncate">
+              {user?.rol === 'coordinador' && user.grado ? user.grado : (user?.rol ?? '')}
+            </p>
           </div>
           <ChevronDown
             size={14}
