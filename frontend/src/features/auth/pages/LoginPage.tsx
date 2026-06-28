@@ -90,8 +90,8 @@ export function LoginPage() {
     <div className="bg-gray-100 font-sans h-screen w-full overflow-hidden flex flex-col lg:flex-row">
 
       {/* Panel izquierdo */}
-      <aside className="w-full lg:w-[520px] xl:w-[580px] h-full bg-white flex flex-col justify-between relative z-10 shadow-2xl flex-shrink-0">
-        <div className="flex-grow flex flex-col items-center justify-center px-8 sm:px-12 py-10 w-full max-w-md mx-auto">
+      <aside className="w-full lg:w-130 xl:w-145 h-full bg-white flex flex-col justify-between relative z-10 shadow-2xl shrink-0">
+        <div className="grow flex flex-col items-center justify-center px-8 sm:px-12 py-10 w-full max-w-md mx-auto">
 
           {/* Logo */}
           <div className="mb-10 w-48 h-48 flex items-center justify-center">
@@ -233,7 +233,7 @@ export function LoginPage() {
           alt="Estadio iluminado de noche"
           className="absolute inset-0 w-full h-full object-cover object-center opacity-90"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0a1526] via-transparent to-transparent opacity-80" />
+        <div className="absolute inset-0 bg-linear-to-t from-[#0a1526] via-transparent to-transparent opacity-80" />
         <div className="absolute bottom-0 left-0 w-full p-12 pb-16 flex flex-col items-start pl-24 xl:pl-32">
           <div className="w-24 h-24 mb-4 flex items-center justify-center opacity-90 grayscale brightness-200 contrast-200">
             <img
