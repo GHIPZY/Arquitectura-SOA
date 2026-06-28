@@ -17,7 +17,7 @@ app.get('/health', (_req, res) => {
 app.get('/deportes', requireAuth as any, async (_req: AuthenticatedRequest, res: Response) => {
   const { data, error } = await supabaseAdmin
     .from('deportes')
-    .select('id, nombre, categoria, max_participantes, activo')
+    .select('id, nombre, slug, categoria, max_participantes, min_participantes, activo')
     .eq('activo', true)
     .order('nombre')
 
@@ -29,7 +29,7 @@ app.get('/deportes', requireAuth as any, async (_req: AuthenticatedRequest, res:
 app.get('/deportes/:id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   const { data, error } = await supabaseAdmin
     .from('deportes')
-    .select('id, nombre, categoria, max_participantes, activo')
+    .select('id, nombre, slug, categoria, max_participantes, min_participantes, activo')
     .eq('id', req.params.id)
     .single()
 

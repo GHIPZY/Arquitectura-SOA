@@ -31,6 +31,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/participantes/, ''),
       },
+      '/api/encuentros': {
+        target: 'http://localhost:3008',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/encuentros/, ''),
+      },
+      '/api/resultados': {
+        target: 'http://localhost:3009',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/resultados/, ''),
+      },
     },
   },
 })

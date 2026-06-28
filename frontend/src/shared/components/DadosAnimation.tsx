@@ -13,7 +13,7 @@ interface DadosAnimationProps {
 
 export function DadosAnimation({ className = '', style, loop = true, autoplay = true }: DadosAnimationProps) {
   return (
-    <div className={`flex items-center justify-center flex-shrink-0 overflow-hidden ${className}`} style={style}>
+    <div className={`flex items-center justify-center shrink-0 overflow-hidden ${className}`} style={style}>
       <LottieComponent
         animationData={dadosData}
         loop={loop}

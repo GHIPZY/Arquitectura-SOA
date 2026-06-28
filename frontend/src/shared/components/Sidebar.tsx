@@ -128,7 +128,7 @@ export function Sidebar() {
           onClick={() => setOpen(v => !v)}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-sidebar-hover transition-colors group cursor-pointer"
         >
-          <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
             {user?.iniciales ?? '??'}
           </div>
           <div className="flex-1 text-left min-w-0">

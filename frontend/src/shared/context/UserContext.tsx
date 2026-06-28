@@ -60,7 +60,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     const nombre = (data.nombre as string | null) ?? session.user.email ?? 'Usuario'
-    const gradoData = data.grados as { nombre: string } | null
+    const gradoData = data.grados as unknown as { nombre: string } | null
     setUser({
       id: session.user.id,
       email: session.user.email ?? '',

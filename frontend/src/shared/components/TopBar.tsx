@@ -37,11 +37,11 @@ export function TopBar({ title, subtitle, extra }: TopBarProps) {
         <h1 className="text-xl font-bold text-text">{title}</h1>
         {subtitle && <p className="text-sm text-muted mt-0.5">{subtitle}</p>}
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
+      <div className="flex items-center gap-3 shrink-0">
         {extra}
         {fechaLimite && (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-500 flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-500 shrink-0">
               <Calendar size={16} />
             </div>
             <div className="flex flex-col">

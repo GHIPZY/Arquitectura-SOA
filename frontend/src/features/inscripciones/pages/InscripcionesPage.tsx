@@ -1,75 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/layouts/MainLayout';
 import { SportsSelector } from '../components/SportsSelector';
 import { CountriesList } from '../components/CountriesList';
 import { PlayerForm } from '../components/PlayerForm';
 import { StatsCards } from '../components/StatsCards';
 import { AlertBanner } from '../components/AlertBanner';
-import { Deporte, Deportista, DEPORTE_LABELS } from '../types';
-
-const paisesData = [
-  { nombre: 'Perú', sede: 'Sede Lima', jugadores: 11, bandera: '🇵🇪' },
-  { nombre: 'Brasil', sede: 'Sede Arequipa', jugadores: 9, bandera: '🇧🇷' },
-  { nombre: 'Argentina', sede: 'Sede Cusco', jugadores: 8, bandera: '🇦🇷' },
-];
+import { Deporte, DEPORTE_LABELS } from '../types';
+import { getDeportes } from '@/services/deportes.service';
+import { getEquipos } from '@/services/equipos.service';
+import { getParticipantes } from '@/services/participantes.service';
+import { useCurrentUser } from '@/shared/context/UserContext';
 
 export function InscripcionesPage() {
+  const { user } = useCurrentUser();
   const [selectedDeporte, setSelectedDeporte] = useState<Deporte>('futbol');
   const [selectedPais, setSelectedPais] = useState<string | null>(null);
-  const [deportistas, setDeportistas] = useState<Deportista[]>([
-    {
-      id: '1',
-      nombre: 'Ricardo Carranza',
-      dni: '45678912',
-      sexo: 'M',
-      tallaCamiseta: 'M',
-      equipoId: '1',
-      activo: true,
-    },
-    {
-      id: '2',
-      nombre: 'Andrea Sanchez',
-      dni: '70123456',
-      sexo: 'F',
-      tallaCamiseta: 'S',
-      equipoId: '1',
-      activo: true,
-    },
-    {
-      id: '3',
-      nombre: 'Luis Mendoza',
-      dni: '12345678',
-      sexo: 'M',
-      tallaCamiseta: 'L',
-      equipoId: '1',
-      activo: true,
-    },
-  ]);
+  const [cupos, setCupos] = useState<Record<string, { usados: number; total: number }>>({});
+  const [totalEquipos, setTotalEquipos] = useState(0);
+  const [totalJugadores, setTotalJugadores] = useState(0);
 
-  const cupos = {
-    futbol: { usados: 12, total: 16 },
-    voley: { usados: 8, total: 8 },
-    basquet: { usados: 4, total: 12 },
-    pingpong: { usados: 24, total: 32 },
-  };
+  useEffect(() => {
+    if (!user?.grado_id) return;
+    async function cargar() {
+      const [deportes, equipos] = await Promise.all([
+        getDeportes().catch(() => []),
+        getEquipos({ grado_id: user!.grado_id! }).catch(() => []),
+      ]);
 
-  const handleAgregarJugador = (jugador: Omit<Deportista, 'id' | 'equipoId' | 'activo'>) => {
-    const nuevoJugador: Deportista = {
-      ...jugador,
-      id: Date.now().toString(),
-      equipoId: '1',
-      activo: true,
-    };
-    setDeportistas([...deportistas, nuevoJugador]);
-  };
+      setTotalEquipos(equipos.length);
 
-  const handleEliminarJugador = (id: string) => {
-    setDeportistas(deportistas.filter((d) => d.id !== id));
-  };
+      const nuevoCupos: Record<string, { usados: number; total: number }> = {};
+      let totalParts = 0;
 
-  const handleEditarJugador = (jugador: Deportista) => {
-    console.log('Editar jugador:', jugador);
-  };
+      await Promise.all(
+        equipos.map(async eq => {
+          const deporte = deportes.find(d => d.id === eq.deporte_id);
+          if (!deporte) return;
+          const parts = await getParticipantes({ equipo_id: eq.id }).catch(() => []);
+          const key = deporte.nombre.toLowerCase().includes('futbol') ? 'futbol'
+            : deporte.nombre.toLowerCase().includes('voley') ? 'voley'
+            : deporte.nombre.toLowerCase().includes('basquet') ? 'basquet'
+            : deporte.nombre.toLowerCase().includes('tenis') || deporte.nombre.toLowerCase().includes('ping') ? 'pingpong'
+            : null;
+          if (key) {
+            nuevoCupos[key] = { usados: parts.length, total: deporte.max_participantes };
+          }
+          totalParts += parts.length;
+        })
+      );
+
+      setCupos(nuevoCupos);
+      setTotalJugadores(totalParts);
+    }
+    cargar();
+  }, [user?.grado_id]);
 
   return (
     <MainLayout title="Inscripciones">
@@ -82,12 +66,6 @@ export function InscripcionesPage() {
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
               Gestión centralizada de equipos y deportistas para la temporada 2024.
             </p>
-          </div>
-          <div className="flex gap-2">
-            <button className="px-6 py-2.5 bg-primary text-on-primary rounded-lg font-bold hover:opacity-90 transition-all flex items-center font-label-md text-label-md">
-              <span className="material-symbols-outlined mr-2">add_circle</span>
-              Nuevo Equipo
-            </button>
           </div>
         </div>
 
@@ -103,7 +81,7 @@ export function InscripcionesPage() {
 
           <div className="lg:col-span-9 space-y-6">
             <CountriesList
-              paises={paisesData}
+              paises={[]}
               selectedPais={selectedPais}
               onSelect={setSelectedPais}
               onNewPais={() => {}}
@@ -113,21 +91,21 @@ export function InscripcionesPage() {
             <PlayerForm
               paisSeleccionado={selectedPais || 'Sin seleccionar'}
               deporte={selectedDeporte}
-              deportistas={deportistas}
-              onAgregar={handleAgregarJugador}
-              onEliminar={handleEliminarJugador}
-              onEditar={handleEditarJugador}
+              deportistas={[]}
+              onAgregar={() => {}}
+              onEliminar={() => {}}
+              onEditar={() => {}}
             />
           </div>
         </div>
 
         <StatsCards
-          totalEquipos={48}
-          variationEquipos="+12%"
-          totalJugadores={512}
-          variationJugadores="+5%"
-          pagosValidados="85%"
-          diasInicio={14}
+          totalEquipos={totalEquipos}
+          variationEquipos=""
+          totalJugadores={totalJugadores}
+          variationJugadores=""
+          pagosValidados="—"
+          diasInicio={0}
         />
       </div>
     </MainLayout>

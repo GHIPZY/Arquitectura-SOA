@@ -1,82 +1,57 @@
-import { useEffect, useState } from 'react'
 import { MainLayout } from '@/layouts/MainLayout'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Calendar } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { useQuery } from '@tanstack/react-query'
 import { useCurrentUser } from '@/shared/context/UserContext'
+import { getEncuentrosHoy } from '@/services/encuentros.service'
+import { getEquipos } from '@/services/equipos.service'
+import { getParticipantesCount } from '@/services/participantes.service'
 
 import equipoIcon from '@/assets/icons/slide/equipo.png'
 import participantesIcon from '@/assets/icons/slide/participantes.png'
 import totalIcon from '@/assets/icons/slide/total.png'
 import registroIcon from '@/assets/icons/slide/registro.png'
 
-interface EncuentroHoy {
-  id: string
-  fecha_hora: string
-  estado: string
-  deportes: { nombre: string } | null
-  equipo_local: { grados: { nombre: string } | null } | null
-  equipo_visitante: { grados: { nombre: string } | null } | null
-  resultados: { puntos_local: number; puntos_visitante: number }[] | null
-}
-
 const ESTADO_CLS: Record<string, string> = {
   programado: 'bg-info/10 text-info',
-  en_curso: 'bg-success/10 text-success',
+  en_curso:   'bg-success/10 text-success',
   finalizado: 'bg-gray-100 text-gray-500',
   postergado: 'bg-warning/10 text-warning',
 }
 
 const ESTADO_LABEL: Record<string, string> = {
   programado: 'Prog.',
-  en_curso: 'LIVE',
+  en_curso:   'LIVE',
   finalizado: 'FIN',
   postergado: 'Post.',
 }
 
 export function DashboardPage() {
   const { user } = useCurrentUser()
-  const [equipos, setEquipos] = useState<number | null>(null)
-  const [participantes, setParticipantes] = useState<number | null>(null)
-  const [totalEncuentros, setTotalEncuentros] = useState<number | null>(null)
-  const [encuentrosHoy, setEncuentrosHoy] = useState<EncuentroHoy[]>([])
 
-  useEffect(() => {
-    async function fetchStats() {
-      const [resEq, resPart, resEnc] = await Promise.all([
-        supabase.from('equipos').select('id', { count: 'exact', head: true }),
-        supabase.from('participantes').select('id', { count: 'exact', head: true }),
-        supabase.from('encuentros').select('id', { count: 'exact', head: true }),
-      ])
-      setEquipos(resEq.count ?? 0)
-      setParticipantes(resPart.count ?? 0)
-      setTotalEncuentros(resEnc.count ?? 0)
-    }
+  const { data: equipos = [] } = useQuery({
+    queryKey: ['equipos-count'],
+    queryFn: () => getEquipos(),
+    staleTime: 5 * 60 * 1000,
+  })
 
-    async function fetchEncuentrosHoy() {
-      const hoy = new Date()
-      const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).toISOString()
-      const fin = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1).toISOString()
-      const { data } = await supabase
-        .from('encuentros')
-        .select(`id, fecha_hora, estado, deportes(nombre),
-          equipo_local:equipos!equipo_local_id(grados(nombre)),
-          equipo_visitante:equipos!equipo_visitante_id(grados(nombre)),
-          resultados(puntos_local, puntos_visitante)`)
-        .gte('fecha_hora', inicio).lt('fecha_hora', fin)
-        .order('fecha_hora', { ascending: true }).limit(6)
-      setEncuentrosHoy((data as unknown as EncuentroHoy[]) ?? [])
-    }
+  const { data: participantes = 0 } = useQuery({
+    queryKey: ['participantes-count'],
+    queryFn: getParticipantesCount,
+    staleTime: 5 * 60 * 1000,
+  })
 
-    fetchStats()
-    fetchEncuentrosHoy()
-  }, [])
+  const { data: encuentrosHoy = [] } = useQuery({
+    queryKey: ['encuentros-hoy'],
+    queryFn: getEncuentrosHoy,
+    staleTime: 2 * 60 * 1000,
+  })
 
   const stats = [
-    { label: 'Equipos registrados', value: equipos, icon: registroIcon },
-    { label: 'Participantes', value: participantes, icon: participantesIcon },
-    { label: 'Total encuentros', value: totalEncuentros, icon: totalIcon },
-    { label: 'Estado del torneo', value: 'Activo', icon: 'status_dot' },
+    { label: 'Equipos registrados', value: equipos.length,       icon: registroIcon      },
+    { label: 'Participantes',        value: participantes,        icon: participantesIcon },
+    { label: 'Encuentros hoy',       value: encuentrosHoy.length, icon: totalIcon         },
+    { label: 'Estado del torneo',    value: 'Activo',             icon: 'status_dot'      },
   ]
 
   return (
@@ -86,7 +61,7 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         {stats.map(({ label, value, icon }) => (
           <div key={label} className="bg-surface border border-border rounded-xl p-5 flex items-center gap-4">
-            <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
+            <div className="w-12 h-12 flex items-center justify-center shrink-0">
               {icon === 'status_dot' ? (
                 <span className="relative flex h-3.5 w-3.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -131,10 +106,10 @@ export function DashboardPage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {encuentrosHoy.map(e => {
-                  const hora = new Date(e.fecha_hora).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
-                  const resultado = e.resultados?.[0]
-                  const nombreL = e.equipo_local?.grados?.nombre ?? '—'
-                  const nombreV = e.equipo_visitante?.grados?.nombre ?? '—'
+                  const hora      = new Date(e.fecha_hora).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+                  const resultado = e.resultados?.[0] ?? null
+                  const nombreL   = e.equipo_local?.grados?.nombre ?? '—'
+                  const nombreV   = e.equipo_visitante?.grados?.nombre ?? '—'
                   return (
                     <tr key={e.id} className="hover:bg-base/50 transition-colors">
                       <td className="px-4 py-3 text-xs text-muted font-medium">{hora}</td>

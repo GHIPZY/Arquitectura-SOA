@@ -58,7 +58,7 @@ export function BanderaPais({ codigo, className = '', size }: BanderaPaisProps) 
   const hasObjectFit = /\bobject-/.test(className)
   const objectCls = hasObjectFit ? '' : 'object-contain'
 
-  const cls = `${sizeCls} rounded-sm ${objectCls} flex-shrink-0 ${className}`
+  const cls = `${sizeCls} rounded-sm ${objectCls} shrink-0 ${className}`
 
   if (src) {
     return <img src={src} alt={codigo} className={cls} />
@@ -67,7 +67,7 @@ export function BanderaPais({ codigo, className = '', size }: BanderaPaisProps) 
   // Fallback emoji mientras no haya webp
   return (
     <span
-      className={`${sizeCls || SIZE[size || 'sm']} flex items-center justify-center text-base leading-none flex-shrink-0 ${className}`}
+      className={`${sizeCls || SIZE[size || 'sm']} flex items-center justify-center text-base leading-none shrink-0 ${className}`}
     >
       {flagEmoji(codigo)}
     </span>

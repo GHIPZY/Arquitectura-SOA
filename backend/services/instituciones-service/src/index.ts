@@ -15,6 +15,37 @@ app.get('/health', (req, res) => {
 })
 
 
+// GET /paises-disponibles — lista todos los países de la tabla grados_paises
+app.get('/paises-disponibles', requireAuth as any, async (_req: AuthenticatedRequest, res: Response) => {
+  const { data, error } = await supabaseAdmin
+    .from('grados_paises')
+    .select('pais, codigo')
+    .order('pais')
+  if (error) return res.status(500).json({ error: error.message })
+  return res.json(data)
+})
+
+// GET /pais-actual — lee el país del grado del usuario sin asignar uno nuevo
+app.get('/pais-actual', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.id
+  if (!userId) return res.status(401).json({ error: 'No autorizado.' })
+
+  const { data: usuario } = await supabaseAdmin
+    .from('usuarios').select('grado_id').eq('id', userId).single()
+
+  if (!usuario?.grado_id) return res.json({ pais: null })
+
+  const { data: grado } = await supabaseAdmin
+    .from('grados').select('pais_asignado').eq('id', usuario.grado_id).single()
+
+  if (!grado?.pais_asignado) return res.json({ pais: null })
+
+  const { data: gp } = await supabaseAdmin
+    .from('grados_paises').select('pais, codigo').eq('pais', grado.pais_asignado).single()
+
+  return res.json({ pais: gp ?? null })
+})
+
 app.post('/asignar-pais', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id

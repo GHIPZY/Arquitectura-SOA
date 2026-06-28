@@ -13,6 +13,16 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'participantes-service' })
 })
 
+// GET /participantes/count — total de participantes activos
+app.get('/participantes/count', requireAuth as any, async (_req: AuthenticatedRequest, res: Response) => {
+  const { count, error } = await supabaseAdmin
+    .from('participantes')
+    .select('id', { count: 'exact', head: true })
+    .eq('activo', true)
+  if (error) return res.status(500).json({ error: error.message })
+  return res.json({ total: count ?? 0 })
+})
+
 // GET /participantes?equipo_id=&id= — listar participantes
 app.get('/participantes', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   const { id, equipo_id } = req.query as Record<string, string>
@@ -76,12 +86,18 @@ app.put('/participantes/:id', requireAuth as any, async (req: AuthenticatedReque
     return res.status(403).json({ error: 'Sin permisos para editar participantes.' })
   }
 
-  const body = { ...req.body }
-  delete body.dni_encriptado
+  const allowed: Record<string, unknown> = {}
+  if (req.body.nombre_completo !== undefined) allowed.nombre_completo = req.body.nombre_completo
+  if (req.body.posicion       !== undefined) allowed.posicion        = req.body.posicion
+  if (req.body.activo         !== undefined) allowed.activo          = req.body.activo
+
+  if (Object.keys(allowed).length === 0) {
+    return res.status(400).json({ error: 'No se enviaron campos actualizables.' })
+  }
 
   const { data, error } = await supabaseAdmin
     .from('participantes')
-    .update(body)
+    .update(allowed)
     .eq('id', req.params.id)
     .select('id, nombre_completo, posicion, activo')
     .single()

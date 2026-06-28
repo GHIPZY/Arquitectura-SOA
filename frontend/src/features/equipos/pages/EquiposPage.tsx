@@ -5,19 +5,16 @@ import { Info, Pencil, Trash2, UserPlus, Users, ChevronDown, Dices, Loader2, Sav
 import { BanderaPais } from '@/shared/components/BanderaPais'
 import { SorteoStage } from '@/shared/components/SorteoStage'
 import { DadosAnimation } from '@/shared/components/DadosAnimation'
-import { supabase } from '@/lib/supabase'
-import { useCurrentUser } from '@/shared/context/UserContext'
+import { useCurrentUser, type CurrentUser } from '@/shared/context/UserContext'
+import { getPaisActual } from '@/services/instituciones.service'
+import { getDeportes, type DeporteDB } from '@/services/deportes.service'
+import { getEquipos, createEquipo, deleteEquipo, type EquipoDB } from '@/services/equipos.service'
+import { getParticipantes, createParticipante, updateParticipante, deleteParticipante } from '@/services/participantes.service'
 
-// Constantes
-
-
-const DEPORTES = [
-  { key: 'futbol', label: 'Fútbol', emoji: '⚽', min: 11, max: 18 },
-  { key: 'voley', label: 'Vóley', emoji: '🏐', min: 6, max: 12 },
-  { key: 'basquet', label: 'Básquetbol', emoji: '🏀', min: 8, max: 15 },
-  { key: 'atletismo', label: 'Atletismo', emoji: '🏃', min: 1, max: 6 },
-  { key: 'pingpong', label: 'Tenis de Mesa', emoji: '🏓', min: 2, max: 4 },
-]
+// Emoji por slug — único dato visual que no vive en la BD
+const EMOJI_MAP: Record<string, string> = {
+  futbol: '⚽', voley: '🏐', basquet: '🏀', atletismo: '🏃', pingpong: '🏓',
+}
 
 const POSICIONES_POR_DEPORTE: Record<string, string[]> = {
   futbol: ['Arquero', 'Defensa Central', 'Lateral Derecho', 'Lateral Izquierdo', 'Mediocampista Defensivo', 'Mediocampista Central', 'Mediocampista Ofensivo', 'Extremo Derecho', 'Extremo Izquierdo', 'Delantero Centro', 'Segunda Punta'],
@@ -41,12 +38,6 @@ function getDeporteIcon(key: string): string | undefined {
   return DEPORTE_ICONS[`/src/assets/icons/deporte/${fileMap[key]}.png`]
 }
 
-const API = {
-  deportes: '/api/deportes',
-  equipos: '/api/equipos',
-  participantes: '/api/participantes',
-}
-
 // ─────────────────────────────────────────────
 // Tipos
 // ─────────────────────────────────────────────
@@ -57,7 +48,8 @@ type EquipoLocal = { deporteKey: string; equipoId: string | null; jugadores: Jug
 type PageData = {
   paisAsignado: { pais: string; codigo: string } | null
   gradoId: string | null
-  deportesDB: Record<string, string>   // deporteKey → UUID en BD
+  deportesDB: Record<string, string>   // slug → UUID en BD
+  deportesList: DeporteDB[]
   equipos: EquipoLocal[]
 }
 
@@ -65,85 +57,41 @@ type PageData = {
 // Helpers
 // ─────────────────────────────────────────────
 
-function matchDeporteKey(nombre: string): string | null {
-  const n = nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  if (n.includes('futbol') || n.includes('football') || n.includes('soccer')) return 'futbol'
-  if (n.includes('voley') || n.includes('volleyball')) return 'voley'
-  if (n.includes('basquet') || n.includes('basketball')) return 'basquet'
-  if (n.includes('atletismo') || n.includes('athletics')) return 'atletismo'
-  if (n.includes('tenis') || n.includes('ping') || n.includes('mesa')) return 'pingpong'
-  return null
-}
+async function fetchPageData(user: CurrentUser): Promise<PageData> {
+  const gradoId = user.grado_id
+  if (!gradoId) return { paisAsignado: null, gradoId: null, deportesDB: {}, deportesList: [], equipos: [] }
 
-async function authHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession()
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${session?.access_token ?? ''}`,
-  }
-}
-
-//Lectura de participantes
-async function fetchPageData(userId: string): Promise<PageData> {
-  // 1. Institución del usuario
-  const { data: usr } = await supabase
-    .from('usuarios').select('grado_id').eq('id', userId).single()
-  if (!usr?.grado_id) {
-    return { paisAsignado: null, gradoId: null, deportesDB: {}, equipos: [] }
-  }
-  const gradoId = usr.grado_id as string
-
-  // 2. Todo en paralelo: país, deportes, equipos
-  const hdr = await authHeaders()
-  const [gradoRes, depsRes, equiposRes] = await Promise.all([
-    supabase.from('grados').select('pais_asignado').eq('id', gradoId).single(),
-    fetch(API.deportes + '/deportes', { headers: hdr }).then(r => r.ok ? r.json() : []).catch(() => []),
-    supabase.from('equipos').select('id, deporte_id, deportes(nombre)').eq('grado_id', gradoId),
+  const [paisResult, depsRes, equiposData] = await Promise.all([
+    getPaisActual().catch(() => ({ pais: null })),
+    getDeportes().catch(() => [] as DeporteDB[]),
+    getEquipos({ grado_id: gradoId }).catch(() => [] as EquipoDB[]),
   ])
 
-  // País
-  let paisAsignado: PageData['paisAsignado'] = null
-  if (gradoRes.data?.pais_asignado) {
-    const { data: gp } = await supabase
-      .from('grados_paises').select('pais, codigo').eq('pais', gradoRes.data.pais_asignado).single()
-    if (gp) paisAsignado = gp as { pais: string; codigo: string }
-  }
+  const paisAsignado: PageData['paisAsignado'] = paisResult.pais
+    ? { pais: paisResult.pais.pais, codigo: paisResult.pais.codigo }
+    : null
 
-  // Deportes map
   const deportesDB: Record<string, string> = {}
-    ; (depsRes as { id: string; nombre: string }[]).forEach(d => {
-      const key = matchDeporteKey(d.nombre)
-      if (key) deportesDB[key] = d.id
-    })
+  depsRes.forEach(d => { if (d.slug) deportesDB[d.slug] = d.id })
 
-  // Equipos + participantes en paralelo
-  const equiposData = equiposRes.data ?? []
   const equipos: EquipoLocal[] = await Promise.all(
-    equiposData
-      .map(async (eq: { id: string; deporte_id: string; deportes: unknown }) => {
-        const dep = eq.deportes as { nombre: string } | null
-        const key = matchDeporteKey(dep?.nombre ?? '')
-        if (!key) return null
+    equiposData.map(async (eq) => {
+      const slug = eq.deportes?.slug ?? null
+      if (!slug) return null
 
-        const { data: parts } = await supabase
-          .from('participantes')
-          .select('id, nombre_completo, dni, posicion')
-          .eq('equipo_id', eq.id)
-          .eq('activo', true)
-          .order('nombre_completo')
+      const parts = await getParticipantes({ equipo_id: eq.id }).catch(() => [])
+      const jugadores: Jugador[] = parts.map(p => ({
+        id: p.id,
+        nombre: p.nombre_completo,
+        dni: p.dni ?? '',
+        posicion: p.posicion ?? '',
+      }))
 
-        const jugadores: Jugador[] = (parts ?? []).map((p: { id: string; nombre_completo: string; dni: string; posicion: string }) => ({
-          id: p.id,
-          nombre: p.nombre_completo,
-          dni: p.dni ?? '',
-          posicion: p.posicion ?? '',
-        }))
-
-        return { deporteKey: key, equipoId: eq.id, jugadores }
-      })
+      return { deporteKey: slug, equipoId: eq.id, jugadores }
+    })
   ).then(r => r.filter((e) => e !== null) as EquipoLocal[])
 
-  return { paisAsignado, gradoId, deportesDB, equipos }
+  return { paisAsignado, gradoId, deportesDB, deportesList: depsRes, equipos }
 }
 
 // ─────────────────────────────────────────────
@@ -157,7 +105,7 @@ export function EquiposPage() {
 
   const { data, isLoading } = useQuery<PageData>({
     queryKey,
-    queryFn: () => fetchPageData(user!.id),
+    queryFn: () => fetchPageData(user!),
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
   })
@@ -175,6 +123,7 @@ export function EquiposPage() {
   const paisAsignado = data?.paisAsignado ?? null
   const gradoId = data?.gradoId ?? null
   const deportesDB = data?.deportesDB ?? {}
+  const deportesList = data?.deportesList ?? []
   const equipos = data?.equipos ?? []
 
   // ── Selección pendiente (local, no persiste hasta "Guardar") ──
@@ -234,48 +183,37 @@ export function EquiposPage() {
   async function guardarSeleccion() {
     if (!gradoId) return
     setGuardando(true)
-    const hdr = await authHeaders()
 
     // Refrescar deportesDB si está vacío
     let currentDeportesDB = { ...deportesDB }
+    let currentDeportesList = [...deportesList]
     if (Object.keys(currentDeportesDB).length === 0) {
       try {
-        const res = await fetch(API.deportes + '/deportes', { headers: hdr })
-        if (res.ok) {
-          const deps = await res.json() as { id: string; nombre: string }[]
-          currentDeportesDB = {}
-          for (const d of deps) {
-            const k = matchDeporteKey(d.nombre)
-            if (k) currentDeportesDB[k] = d.id
-          }
-          patchData({ deportesDB: currentDeportesDB })
-        }
+        const deps = await getDeportes()
+        currentDeportesDB = {}
+        for (const d of deps) { if (d.slug) currentDeportesDB[d.slug] = d.id }
+        currentDeportesList = deps
+        patchData({ deportesDB: currentDeportesDB, deportesList: deps })
       } catch { /* silencioso */ }
     }
 
     // Crear equipos nuevos
     for (const key of deportesAgregados) {
-      const deporte = DEPORTES.find(d => d.key === key)!
+      const deporte = currentDeportesList.find(d => d.slug === key)
       const deporteIdEnBD = currentDeportesDB[key]
       if (!deporteIdEnBD) continue
       try {
-        const res = await fetch(API.equipos + '/equipos', {
-          method: 'POST', headers: hdr,
-          body: JSON.stringify({
-            deporte_id: deporteIdEnBD,
-            grado_id: gradoId,
-            nombre_equipo: `Equipo ${deporte.label} - ${user?.nombre ?? 'Grado'}`,
-            estado: 'inscrito',
-          }),
+        const equipo = await createEquipo({
+          deporte_id: deporteIdEnBD,
+          grado_id: gradoId,
+          nombre_equipo: `Equipo ${deporte?.nombre ?? key} - ${user?.nombre ?? 'Grado'}`,
+          estado: 'inscrito',
         })
-        const json = await res.json()
-        if (res.ok && json.id) {
-          patchEquipos(old =>
-            old.some(e => e.deporteKey === key)
-              ? old
-              : [...old, { deporteKey: key, equipoId: json.id, jugadores: [] }]
-          )
-        }
+        patchEquipos(old =>
+          old.some(e => e.deporteKey === key)
+            ? old
+            : [...old, { deporteKey: key, equipoId: equipo.id, jugadores: [] }]
+        )
       } catch { /* silencioso */ }
     }
 
@@ -287,7 +225,7 @@ export function EquiposPage() {
         continue
       }
       try {
-        await fetch(`${API.equipos}/equipos/${equipo.equipoId}`, { method: 'DELETE', headers: hdr })
+        await deleteEquipo(equipo.equipoId)
         patchEquipos(old => old.filter(e => e.deporteKey !== key))
       } catch { /* silencioso */ }
     }
@@ -323,20 +261,13 @@ export function EquiposPage() {
     const equipo = getEquipo(deporteKey)
 
     try {
-      const headers = await authHeaders()
-
       if (editingId) {
-        const res = await fetch(`${API.participantes}/participantes/${editingId}`, {
-          method: 'PUT', headers,
-          body: JSON.stringify({ nombre_completo: nombre.trim(), dni, posicion }),
-        })
-        if (!res.ok) throw new Error((await res.json()).error)
-
+        await updateParticipante(editingId, { nombre_completo: nombre.trim(), posicion })
         patchEquipos(old => old.map(e =>
           e.deporteKey !== deporteKey ? e : {
             ...e,
             jugadores: e.jugadores.map(j =>
-              j.id === editingId ? { ...j, nombre: nombre.trim(), dni, posicion } : j
+              j.id === editingId ? { ...j, nombre: nombre.trim(), posicion } : j
             ),
           }
         ))
@@ -344,13 +275,12 @@ export function EquiposPage() {
         if (!equipo.equipoId) { setFormError('No se pudo registrar el equipo. Deselecciona el deporte e inténtalo de nuevo.'); return }
         if (equipo.jugadores.some(j => j.dni === dni)) { setFormError('Ya existe un jugador con ese DNI.'); return }
 
-        const res = await fetch(API.participantes + '/participantes', {
-          method: 'POST', headers,
-          body: JSON.stringify({ equipo_id: equipo.equipoId, nombre_completo: nombre.trim(), dni, posicion }),
+        const { id } = await createParticipante({
+          equipo_id: equipo.equipoId,
+          nombre_completo: nombre.trim(),
+          dni,
+          posicion,
         })
-        if (!res.ok) throw new Error((await res.json()).error)
-        const { id } = await res.json()
-
         patchEquipos(old => old.map(e =>
           e.deporteKey !== deporteKey ? e : {
             ...e,
@@ -373,8 +303,7 @@ export function EquiposPage() {
       e.deporteKey !== deporteKey ? e : { ...e, jugadores: e.jugadores.filter(j => j.id !== id) }
     ))
     try {
-      const headers = await authHeaders()
-      await fetch(`${API.participantes}/participantes/${id}`, { method: 'DELETE', headers })
+      await deleteParticipante(id)
     } catch { /* Sin catch */ }
   }
 
@@ -420,7 +349,7 @@ export function EquiposPage() {
           <div onClick={() => setShowRuleta(true)}
             className="bg-white rounded-2xl border border-neutral-200 py-6 px-7 flex flex-col sm:flex-row sm:items-center justify-between gap-5 shadow-sm hover:shadow-md hover:border-amber-400/60 transition-all duration-300 cursor-pointer">
             <div className="flex items-start gap-5">
-              <DadosAnimation className="w-20 h-20 flex-shrink-0 -mt-1.5" />
+              <DadosAnimation className="w-20 h-20 shrink-0 -mt-1.5" />
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Sorteo Pendiente</span>
@@ -432,7 +361,7 @@ export function EquiposPage() {
                 </p>
               </div>
             </div>
-            <button className="px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-extrabold text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer flex-shrink-0 shadow-[0_4px_12px_rgba(245,158,11,0.15)]">
+            <button className="px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-extrabold text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer shrink-0 shadow-[0_4px_12px_rgba(245,158,11,0.15)]">
               <Dices size={14} /> Sortear País
             </button>
           </div>
@@ -441,7 +370,7 @@ export function EquiposPage() {
         {/* PASO 1 — Deportes */}
         <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-sm">
           <div className="mb-5">
-            <h2 className="text-base font-extrabold text-slate-800 uppercase tracking-tight">1. Selección de Deportes</h2>
+            <h2 className="font-extrabold uppercase tracking-tight text-slate-800">1. Selección de Deportes</h2>
             <p className="text-xs text-neutral-500 mt-0.5">
               Marca las disciplinas en las que participará tu institución. Puedes inscribirte en múltiples disciplinas (se habilitará un formulario para cada una).
             </p>
@@ -454,12 +383,12 @@ export function EquiposPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-              {DEPORTES.map(d => {
-                const activo = deportesPend.includes(d.key)
-                const icon = getDeporteIcon(d.key)
+              {deportesList.map(d => {
+                const activo = deportesPend.includes(d.slug)
+                const icon = getDeporteIcon(d.slug)
                 return (
-                  <button key={d.key} onClick={() => toggleDeporte(d.key)}
-                    className={`relative flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all cursor-pointer group text-center ${activo ? 'border-primary bg-primary/[0.01] shadow-[0_4px_12px_rgba(30,58,138,0.04)]'
+                  <button key={d.slug} onClick={() => toggleDeporte(d.slug)}
+                    className={`relative flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all cursor-pointer group text-center ${activo ? 'border-primary bg-primary/1 shadow-[0_4px_12px_rgba(30,58,138,0.04)]'
                         : 'border-neutral-200/80 bg-white hover:border-neutral-300 hover:shadow-sm'
                       }`}
                   >
@@ -469,11 +398,11 @@ export function EquiposPage() {
                       </div>
                     )}
                     <div className="w-16 h-16 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
-                      {icon ? <img src={icon} alt={d.label} className="w-14 h-14 object-contain" /> : <span className="text-3xl">{d.emoji}</span>}
+                      {icon ? <img src={icon} alt={d.nombre} className="w-14 h-14 object-contain" /> : <span className="text-3xl">{EMOJI_MAP[d.slug] ?? '🏅'}</span>}
                     </div>
                     <div>
-                      <p className={`text-sm font-bold tracking-tight ${activo ? 'text-primary' : 'text-slate-800'}`}>{d.label}</p>
-                      <p className="text-[10px] text-neutral-400 mt-0.5 font-medium">Mín: {d.min} · Máx: {d.max}</p>
+                      <p className={`text-sm font-bold tracking-tight ${activo ? 'text-primary' : 'text-slate-800'}`}>{d.nombre}</p>
+                      <p className="text-[10px] text-neutral-400 mt-0.5 font-medium">Mín: {d.min_participantes} · Máx: {d.max_participantes}</p>
                     </div>
                   </button>
                 )
@@ -508,11 +437,13 @@ export function EquiposPage() {
             <h2 className="text-sm font-bold text-text">2. Equipos e integrantes</h2>
 
             {deportesPend.map((key: string) => {
-              const deporte = DEPORTES.find(d => d.key === key)!
+              const deporte = deportesList.find(d => d.slug === key)
               const equipo = getEquipo(key)
               const abierto = expandido === key
               const { jugadores } = equipo
-              const valido = jugadores.length >= deporte.min && jugadores.length <= deporte.max
+              const minJ = deporte?.min_participantes ?? 0
+              const maxJ = deporte?.max_participantes ?? 99
+              const valido = jugadores.length >= minJ && jugadores.length <= maxJ
               const posicionesDeporte = POSICIONES_POR_DEPORTE[key] ?? []
 
               return (
@@ -528,11 +459,11 @@ export function EquiposPage() {
                       <div className="text-left">
                         <div className="flex items-center gap-2.5">
                           {getDeporteIcon(key)
-                            ? <img src={getDeporteIcon(key)} alt={deporte.label} className="w-5 h-5 object-contain flex-shrink-0" />
-                            : <span className="text-base">{deporte.emoji}</span>}
+                            ? <img src={getDeporteIcon(key)} alt={deporte?.nombre ?? key} className="w-5 h-5 object-contain shrink-0" />
+                            : <span className="text-base">{EMOJI_MAP[key] ?? '🏅'}</span>}
                           <p className="text-sm font-extrabold text-slate-800 tracking-tight">
-                            {deporte.label}
-                            <span className="ml-2 text-xs font-semibold text-neutral-400">({jugadores.length} / {deporte.max})</span>
+                            {deporte?.nombre ?? key}
+                            <span className="ml-2 text-xs font-semibold text-neutral-400">({jugadores.length} / {maxJ})</span>
                           </p>
                         </div>
                         <p className="text-xs text-neutral-500 mt-0.5">
@@ -681,7 +612,7 @@ export function EquiposPage() {
 
                       {/* Botón agregar */}
                       {showForm !== key && (
-                        <button onClick={() => abrirFormNuevo(key)} disabled={!equipo.equipoId || jugadores.length >= deporte.max}
+                        <button onClick={() => abrirFormNuevo(key)} disabled={!equipo.equipoId || jugadores.length >= maxJ}
                           className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-border rounded-lg text-sm text-muted hover:border-primary hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                           <UserPlus size={15} /> Agregar jugador
                         </button>
@@ -690,12 +621,11 @@ export function EquiposPage() {
                       {/* Requisitos de cantidad de jugadores */}
                       <div className="mt-4 pt-3 border-t border-neutral-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div className="flex items-center gap-2 text-neutral-500">
-                          <span className={`w-1.5 h-1.5 rounded-full ${jugadores.length < deporte.min ? 'bg-amber-500' : 'bg-green-500'}`} />
-                          <span className="text-[11px] font-medium">Requisito de la disciplina: Mínimo {deporte.min} y Máximo {deporte.max} jugadores.</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${jugadores.length < minJ ? 'bg-amber-500' : 'bg-green-500'}`} />
+                          <span className="text-[11px] font-medium">Requisito de la disciplina: Mínimo {minJ} y Máximo {maxJ} jugadores.</span>
                         </div>
-                        <span className={`text-[11px] font-bold ${jugadores.length < deporte.min ? 'text-amber-600' : 'text-green-600'
-                          }`}>
-                          Registrados: {jugadores.length} de {deporte.max}
+                        <span className={`text-[11px] font-bold ${jugadores.length < minJ ? 'text-amber-600' : 'text-green-600'}`}>
+                          Registrados: {jugadores.length} de {maxJ}
                         </span>
                       </div>
                     </div>
