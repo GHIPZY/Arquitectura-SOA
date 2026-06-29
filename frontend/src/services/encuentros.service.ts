@@ -28,6 +28,16 @@ export async function getEncuentros(params?: { deporte_id?: string; estado?: str
   return res.json()
 }
 
+// Lectura pública (espectador sin login)
+export async function getEncuentrosPublic(params?: { deporte_id?: string; estado?: string }): Promise<EncuentroDB[]> {
+  const qs = new URLSearchParams()
+  if (params?.deporte_id) qs.set('deporte_id', params.deporte_id)
+  if (params?.estado)     qs.set('estado', params.estado)
+  const res = await fetch(`/api/encuentros/public/encuentros?${qs}`)
+  if (!res.ok) throw new Error('Error al cargar encuentros')
+  return res.json()
+}
+
 export async function getEncuentrosHoy(): Promise<EncuentroDB[]> {
   const headers = await getAuthHeaders()
   const res = await fetch('/api/encuentros/encuentros/hoy', { headers })
