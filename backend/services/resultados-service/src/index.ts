@@ -44,7 +44,10 @@ app.post('/resultados', requireAuth as any, async (req: AuthenticatedRequest, re
 
   const { data, error } = await supabaseAdmin
     .from('resultados')
-    .upsert({ encuentro_id, puntos_local, puntos_visitante }, { onConflict: 'encuentro_id' })
+    .upsert(
+      { encuentro_id, puntos_local, puntos_visitante, registrado_por: req.user!.id },
+      { onConflict: 'encuentro_id' }
+    )
     .select()
     .single()
 

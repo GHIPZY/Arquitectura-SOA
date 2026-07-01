@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 
 export type Rol = 'administrador' | 'coordinador' | 'espectador'
@@ -28,11 +28,20 @@ const UserContext = createContext<{ user: CurrentUser | null; loading: boolean }
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
+  // Ref para saber si ya tenemos usuario sin depender del closure
+  const userRef = useRef<CurrentUser | null>(null)
 
-  async function load() {
+  function applyUser(u: CurrentUser | null) {
+    userRef.current = u
+    setUser(u)
+  }
+
+  async function fetchUser(showLoading: boolean) {
+    if (showLoading) setLoading(true)
+
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
-      setUser(null)
+      applyUser(null)
       setLoading(false)
       return
     }
@@ -45,7 +54,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     if (error || !data) {
       const email = session.user.email ?? ''
-      setUser({
+      applyUser({
         id: session.user.id,
         email,
         nombre: email.split('@')[0],
@@ -55,30 +64,37 @@ export function UserProvider({ children }: { children: ReactNode }) {
         grado: null,
         iniciales: email.slice(0, 2).toUpperCase(),
       })
-      setLoading(false)
-      return
+    } else {
+      const nombre = (data.nombre as string | null) ?? session.user.email ?? 'Usuario'
+      const gradoData = data.grados as unknown as { nombre: string } | null
+      applyUser({
+        id: session.user.id,
+        email: session.user.email ?? '',
+        nombre,
+        rol: data.rol as Rol,
+        institucion_id: (data.institucion_id as string | null) ?? null,
+        grado_id: (data.grado_id as string | null) ?? null,
+        grado: gradoData?.nombre ?? null,
+        iniciales: makeIniciales(nombre),
+      })
     }
 
-    const nombre = (data.nombre as string | null) ?? session.user.email ?? 'Usuario'
-    const gradoData = data.grados as unknown as { nombre: string } | null
-    setUser({
-      id: session.user.id,
-      email: session.user.email ?? '',
-      nombre,
-      rol: data.rol as Rol,
-      institucion_id: (data.institucion_id as string | null) ?? null,
-      grado_id: (data.grado_id as string | null) ?? null,
-      grado: gradoData?.nombre ?? null,
-      iniciales: makeIniciales(nombre),
-    })
     setLoading(false)
   }
 
   useEffect(() => {
-    load()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) load()
-      else { setUser(null); setLoading(false) }
+    fetchUser(true)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        applyUser(null)
+        setLoading(false)
+      } else if (event === 'SIGNED_IN' && !userRef.current) {
+        // Solo muestra spinner en login real (cuando no había usuario)
+        fetchUser(true)
+      } else {
+        // SIGNED_IN con usuario ya cargado, TOKEN_REFRESHED, etc. → siempre silencioso
+        fetchUser(false)
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
