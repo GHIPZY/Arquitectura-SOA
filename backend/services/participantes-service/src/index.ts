@@ -34,7 +34,7 @@ app.get('/participantes', requireAuth as any, async (req: AuthenticatedRequest, 
   if (id) {
     const { data, error } = await supabaseAdmin
       .from('participantes')
-      .select('id, nombre_completo, posicion, activo, created_at, equipo_id')
+      .select('id, nombre_completo, dni, posicion, activo, created_at, equipo_id')
       .eq('id', id)
       .single()
     if (error) return res.status(404).json({ error: error.message })
@@ -43,7 +43,7 @@ app.get('/participantes', requireAuth as any, async (req: AuthenticatedRequest, 
 
   const { data, error } = await supabaseAdmin
     .from('participantes')
-    .select('id, nombre_completo, posicion, activo, created_at, equipo_id')
+    .select('id, nombre_completo, dni, posicion, activo, created_at, equipo_id')
     .eq('equipo_id', equipo_id)
     .eq('activo', true)
     .order('nombre_completo')
@@ -52,16 +52,55 @@ app.get('/participantes', requireAuth as any, async (req: AuthenticatedRequest, 
   return res.json(data)
 })
 
+// Helper — verifica si el período de inscripciones está cerrado
+async function inscripcionCerrada(): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from('configuracion')
+    .select('valor')
+    .eq('clave', 'fecha_limite_inscripciones')
+    .maybeSingle()
+  if (!data?.valor) return false
+  return new Date() > new Date(data.valor)
+}
+
 // POST /participantes — crear participante
 app.post('/participantes', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   if (!['administrador', 'coordinador'].includes(req.user?.rol ?? '')) {
     return res.status(403).json({ error: 'Sin permisos para registrar participantes.' })
   }
 
+  if (req.user?.rol === 'coordinador' && await inscripcionCerrada()) {
+    return res.status(403).json({ error: 'El período de inscripciones ha cerrado. Ya no es posible agregar jugadores.' })
+  }
+
   const { equipo_id, nombre_completo, dni, posicion } = req.body
 
   if (!equipo_id || !nombre_completo || !dni) {
     return res.status(400).json({ error: 'equipo_id, nombre_completo y dni son requeridos.' })
+  }
+
+  // Obtener el deporte del equipo actual
+  const { data: equipo, error: eqError } = await supabaseAdmin
+    .from('equipos')
+    .select('deporte_id')
+    .eq('id', equipo_id)
+    .single()
+
+  if (eqError || !equipo) {
+    return res.status(400).json({ error: 'Equipo no encontrado.' })
+  }
+
+  // Verificar que el DNI no esté ya en otro equipo del mismo deporte
+  const { data: duplicado } = await supabaseAdmin
+    .from('participantes')
+    .select('id, equipos!inner(deporte_id)')
+    .eq('dni', dni)
+    .eq('activo', true)
+    .eq('equipos.deporte_id', equipo.deporte_id)
+    .maybeSingle()
+
+  if (duplicado) {
+    return res.status(409).json({ error: 'Este estudiante (DNI) ya está registrado en otro equipo para este deporte.' })
   }
 
   const { data, error } = await supabaseAdmin
@@ -110,6 +149,10 @@ app.put('/participantes/:id', requireAuth as any, async (req: AuthenticatedReque
 app.delete('/participantes/:id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   if (!['administrador', 'coordinador'].includes(req.user?.rol ?? '')) {
     return res.status(403).json({ error: 'Sin permisos para eliminar participantes.' })
+  }
+
+  if (req.user?.rol === 'coordinador' && await inscripcionCerrada()) {
+    return res.status(403).json({ error: 'El período de inscripciones ha cerrado. Ya no es posible eliminar jugadores.' })
   }
 
   const { error } = await supabaseAdmin

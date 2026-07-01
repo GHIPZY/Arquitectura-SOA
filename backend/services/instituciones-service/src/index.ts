@@ -15,6 +15,16 @@ app.get('/health', (req, res) => {
 })
 
 
+// GET /grados — lista todos los grados con país asignado
+app.get('/grados', requireAuth as any, async (_req: AuthenticatedRequest, res: Response) => {
+  const { data, error } = await supabaseAdmin
+    .from('grados')
+    .select('id, nombre, pais_asignado')
+    .order('nombre')
+  if (error) return res.status(500).json({ error: error.message })
+  return res.json(data)
+})
+
 // GET /paises-disponibles — lista todos los países de la tabla grados_paises
 app.get('/paises-disponibles', requireAuth as any, async (_req: AuthenticatedRequest, res: Response) => {
   const { data, error } = await supabaseAdmin

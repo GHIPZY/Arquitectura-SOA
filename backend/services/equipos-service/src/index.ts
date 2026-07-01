@@ -41,10 +41,25 @@ app.get('/equipos', requireAuth as any, async (req: AuthenticatedRequest, res: R
   return res.json(data)
 })
 
+// Helper — verifica si el período de inscripciones está cerrado
+async function inscripcionCerrada(): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from('configuracion')
+    .select('valor')
+    .eq('clave', 'fecha_limite_inscripciones')
+    .maybeSingle()
+  if (!data?.valor) return false
+  return new Date() > new Date(data.valor)
+}
+
 // POST /equipos — crear equipo (coordinador o administrador)
 app.post('/equipos', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   if (!['administrador', 'coordinador'].includes(req.user?.rol ?? '')) {
     return res.status(403).json({ error: 'Sin permisos para crear equipos.' })
+  }
+
+  if (req.user?.rol === 'coordinador' && await inscripcionCerrada()) {
+    return res.status(403).json({ error: 'El período de inscripciones ha cerrado. Ya no es posible inscribir equipos.' })
   }
 
   // Mapear 'nombre' → 'nombre_equipo' si viene del frontend
@@ -85,6 +100,10 @@ app.put('/equipos/:id', requireAuth as any, async (req: AuthenticatedRequest, re
 app.delete('/equipos/:id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   if (!['administrador', 'coordinador'].includes(req.user?.rol ?? '')) {
     return res.status(403).json({ error: 'Sin permisos para eliminar equipos.' })
+  }
+
+  if (req.user?.rol === 'coordinador' && await inscripcionCerrada()) {
+    return res.status(403).json({ error: 'El período de inscripciones ha cerrado. Ya no es posible eliminar equipos.' })
   }
 
   const { error } = await supabaseAdmin.from('equipos').delete().eq('id', req.params.id)
