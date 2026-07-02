@@ -10,6 +10,10 @@ import { getEquipos, type EquipoDB } from '@/services/equipos.service'
 import { getEncuentros, type EncuentroDB } from '@/services/encuentros.service'
 import { generarTorneo, regenerarTorneo, eliminarSorteo } from '@/services/admin.service'
 import { getAuthHeaders } from '@/services/auth.service'
+import {
+  getAtletismoSorteo, generarAtletismoSorteo, eliminarAtletismoSorteo,
+  type AtletismoSorteo,
+} from '@/services/atletismo.service'
 
 // ── Assets ────────────────────────────────────────────────────────────────────
 const PAIS_IMGS = import.meta.glob('/src/assets/paises/*.webp', {
@@ -64,6 +68,12 @@ export function SorteoTorneoPage() {
   const [eliminando, setEliminando]               = useState(false)
   const [error, setError]                         = useState<string | null>(null)
   const [success, setSuccess]                     = useState<string | null>(null)
+
+  // Atletismo sorteo state
+  const [generandoAtl, setGenerandoAtl]           = useState(false)
+  const [eliminandoAtl, setEliminandoAtl]         = useState(false)
+  const [confirmarElimAtl, setConfirmarElimAtl]   = useState(false)
+  const [omitidas, setOmitidas]                   = useState<{ prueba: string; inscritos: number }[]>([])
 
   const { data: deportes = [], isLoading: loadingDep } = useQuery({
     queryKey: ['deportes'],
@@ -138,9 +148,50 @@ export function SorteoTorneoPage() {
     } finally { setRegenerando(false) }
   }
 
-  const deporte    = deportes.find(d => d.id === deporteId)
-  const abierto    = expandido === deporteId && !!deporteId
+  const deporte      = deportes.find(d => d.id === deporteId)
+  const esAtletismo  = deporte?.slug === 'atletismo'
+  const abierto      = expandido === deporteId && !!deporteId
   const puedeGenerar = equipos.length >= 2
+
+  const { data: atletismoSorteo = [], refetch: refetchSorteo } = useQuery<AtletismoSorteo[]>({
+    queryKey: ['atletismo-sorteo'],
+    queryFn: () => getAtletismoSorteo(),
+    enabled: esAtletismo,
+    staleTime: 0,
+  })
+
+  // Agrupar carriles por prueba
+  const sorteoByPrueba: Record<string, AtletismoSorteo[]> = {}
+  atletismoSorteo.forEach(s => {
+    if (!sorteoByPrueba[s.prueba]) sorteoByPrueba[s.prueba] = []
+    sorteoByPrueba[s.prueba].push(s)
+  })
+  const tieneSorteoAtl = atletismoSorteo.length > 0
+
+  async function handleGenerarAtl() {
+    setGenerandoAtl(true); setError(null); setSuccess(null); setOmitidas([])
+    try {
+      const r = await generarAtletismoSorteo()
+      await refetchSorteo()
+      setOmitidas(r.omitidas ?? [])
+      if (r.pruebas > 0) {
+        setSuccess(`Sorteo generado: ${r.total} atletas en ${r.pruebas} prueba${r.pruebas !== 1 ? 's' : ''}.`)
+      } else {
+        setError('Ninguna prueba tiene suficientes atletas (mínimo 2).')
+      }
+    } catch (e: unknown) { setError((e as Error).message) }
+    finally { setGenerandoAtl(false) }
+  }
+
+  async function handleEliminarAtl() {
+    setEliminandoAtl(true); setError(null); setSuccess(null); setConfirmarElimAtl(false)
+    try {
+      await eliminarAtletismoSorteo()
+      await refetchSorteo()
+      setSuccess('Sorteo de carriles eliminado.')
+    } catch (e: unknown) { setError((e as Error).message) }
+    finally { setEliminandoAtl(false) }
+  }
 
   return (
     <MainLayout
@@ -238,7 +289,106 @@ export function SorteoTorneoPage() {
               </button>
 
               {/* Panel */}
-              {abierto && (
+              {abierto && esAtletismo && (
+                <div className="border-t border-border px-5 pb-5 pt-4 space-y-5">
+                  <p className="text-xs text-muted">
+                    El sorteo de atletismo asigna el <strong>carril de salida</strong> a cada atleta por prueba de forma aleatoria.
+                  </p>
+
+                  {error   && <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2.5 rounded-lg"><AlertTriangle size={13} />{error}</div>}
+                  {success && <div className="flex items-center gap-2 text-xs text-success bg-success/10 border border-success/20 px-3 py-2.5 rounded-lg"><CheckCircle2 size={13} />{success}</div>}
+                  {omitidas.length > 0 && (
+                    <div className="border border-border rounded-lg px-4 py-3 space-y-1.5">
+                      <p className="text-xs font-semibold text-muted flex items-center gap-1.5">
+                        <AlertTriangle size={13} /> Pruebas omitidas — mínimo 2 atletas requeridos:
+                      </p>
+                      {omitidas.map(o => (
+                        <p key={o.prueba} className="text-xs text-muted pl-5">
+                          · <span className="font-semibold text-text">{o.prueba}</span> — {o.inscritos === 0 ? 'sin atletas inscritos' : `solo ${o.inscritos} inscrito`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={handleGenerarAtl}
+                      disabled={generandoAtl}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                    >
+                      {generandoAtl ? <Loader2 size={15} className="animate-spin" /> : <Shuffle size={15} />}
+                      {tieneSorteoAtl ? 'Regenerar sorteo' : 'Generar sorteo de carriles'}
+                    </button>
+                    {tieneSorteoAtl && !confirmarElimAtl && (
+                      <button
+                        onClick={() => setConfirmarElimAtl(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-surface border border-red-300 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 transition-all cursor-pointer"
+                      >
+                        <Trash2 size={15} /> Eliminar sorteo
+                      </button>
+                    )}
+                  </div>
+
+                  {confirmarElimAtl && (
+                    <div className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-3">
+                      <p className="text-sm font-bold text-red-700 flex items-center gap-2"><AlertTriangle size={15} />¿Eliminar sorteo de carriles?</p>
+                      <div className="flex gap-2">
+                        <button onClick={handleEliminarAtl} disabled={eliminandoAtl}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 cursor-pointer disabled:opacity-60">
+                          {eliminandoAtl ? <Loader2 size={13} className="animate-spin" /> : null}
+                          {eliminandoAtl ? 'Eliminando…' : 'Sí, eliminar'}
+                        </button>
+                        <button onClick={() => setConfirmarElimAtl(false)} className="px-4 py-2 border border-red-200 text-red-600 rounded-lg text-xs font-bold cursor-pointer">Cancelar</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {tieneSorteoAtl && (
+                    <div className="space-y-4">
+                      {Object.entries(sorteoByPrueba).map(([prueba, atletas]) => (
+                        <div key={prueba} className="border border-border rounded-lg overflow-hidden">
+                          <div className="px-4 py-2.5 bg-base border-b border-border">
+                            <p className="text-xs font-bold text-text">{prueba}</p>
+                          </div>
+                          <table className="w-full">
+                            <thead className="bg-surface border-b border-border">
+                              <tr>
+                                {['Carril', 'Atleta', 'Grado'].map(h => (
+                                  <th key={h} className="text-left px-4 py-2 text-xs font-semibold text-muted">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {atletas.map(a => {
+                                const pais   = a.participantes?.equipos?.grados?.pais_asignado ?? null
+                                const codigo = pais ? (codigoMap[pais] ?? '') : ''
+                                const flag   = getFlag(codigo)
+                                const grado  = a.participantes?.equipos?.grados?.nombre ?? '—'
+                                return (
+                                  <tr key={a.id} className="hover:bg-base/40 transition-colors">
+                                    <td className="px-4 py-2.5">
+                                      <span className="w-7 h-7 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">{a.carril}</span>
+                                    </td>
+                                    <td className="px-4 py-2.5 text-sm font-semibold text-text">{a.participantes?.nombre_completo ?? '—'}</td>
+                                    <td className="px-4 py-2.5">
+                                      <div className="flex items-center gap-2">
+                                        {flag && <img src={flag} alt={pais ?? ''} className="w-5 h-5 rounded object-cover border border-border" />}
+                                        <span className="text-xs text-muted">{grado}</span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {abierto && !esAtletismo && (
                 <div className="border-t border-border px-5 pb-5 pt-4 space-y-5">
 
                   {/* Equipos inscritos */}

@@ -11,6 +11,7 @@ import { ConfiguracionPage }    from './features/configuracion/pages/Configuraci
 import { UsuariosPage }         from './features/usuarios/pages/UsuariosPage'
 import { PosicionesPage }      from './features/posiciones/pages/PosicionesPage'
 import { EstadisticasPage }   from './features/estadisticas/pages/EstadisticasPage'
+import { AtletismoPage }      from './features/atletismo/pages/AtletismoPage'
 import { useCurrentUser }    from './shared/context/UserContext'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -48,6 +49,7 @@ function App() {
       <Route path="/usuarios"      element={<AuthGuard><RolGuard roles={['administrador']}><UsuariosPage /></RolGuard></AuthGuard>} />
       <Route path="/posiciones"    element={<AuthGuard><PosicionesPage /></AuthGuard>} />
       <Route path="/estadisticas"  element={<AuthGuard><EstadisticasPage /></AuthGuard>} />
+      <Route path="/atletismo"     element={<AuthGuard><AtletismoPage /></AuthGuard>} />
     </Routes>
   )
 }

@@ -169,6 +169,153 @@ app.get('/estadisticas/ranking', requireAuth as any, async (req: AuthenticatedRe
   return res.json(ranking)
 })
 
+// ─── GET /atletismo/sorteo?prueba= — carriles asignados ─────────────────────
+app.get('/atletismo/sorteo', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  const { prueba } = req.query as Record<string, string>
+
+  let query = supabaseAdmin
+    .from('atletismo_sorteo')
+    .select(`
+      id, prueba, carril,
+      participante_id,
+      participantes(nombre_completo, posicion,
+        equipos(grados(nombre, pais_asignado))
+      )
+    `)
+    .order('prueba').order('carril')
+
+  if (prueba) query = query.eq('prueba', prueba)
+
+  const { data, error } = await query
+  if (error) return res.status(500).json({ error: error.message })
+  return res.json(data ?? [])
+})
+
+// ─── POST /atletismo/sorteo/generar — sorteo aleatorio de carriles ───────────
+app.post('/atletismo/sorteo/generar', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.rol !== 'administrador') return res.status(403).json({ error: 'Sin permisos.' })
+
+  const { data: participantes, error } = await supabaseAdmin
+    .from('participantes')
+    .select('id, posicion, equipos!inner(deportes!inner(slug))')
+    .eq('activo', true)
+    .eq('equipos.deportes.slug', 'atletismo')
+    .not('posicion', 'is', null)
+
+  if (error) return res.status(500).json({ error: error.message })
+
+  const byPrueba: Record<string, string[]> = {}
+  participantes?.forEach(p => {
+    if (!p.posicion) return
+    if (!byPrueba[p.posicion]) byPrueba[p.posicion] = []
+    byPrueba[p.posicion].push(p.id)
+  })
+
+  const rows: { prueba: string; participante_id: string; carril: number }[] = []
+  const omitidas: { prueba: string; inscritos: number }[] = []
+
+  Object.entries(byPrueba).forEach(([prueba, ids]) => {
+    if (ids.length < 2) {
+      omitidas.push({ prueba, inscritos: ids.length })
+      return
+    }
+    const shuffled = [...ids].sort(() => Math.random() - 0.5)
+    shuffled.forEach((id, i) => rows.push({ prueba, participante_id: id, carril: i + 1 }))
+  })
+
+  await supabaseAdmin.from('atletismo_sorteo').delete().gte('carril', 1)
+
+  if (rows.length === 0) {
+    return res.json({ total: 0, pruebas: 0, omitidas })
+  }
+
+  const { data: inserted, error: insertError } = await supabaseAdmin
+    .from('atletismo_sorteo').insert(rows).select()
+
+  if (insertError) return res.status(400).json({ error: insertError.message })
+  return res.status(201).json({
+    total: inserted?.length ?? 0,
+    pruebas: Object.keys(byPrueba).filter(p => !omitidas.find(o => o.prueba === p)).length,
+    omitidas,
+  })
+})
+
+// ─── DELETE /atletismo/sorteo — eliminar sorteo ──────────────────────────────
+app.delete('/atletismo/sorteo', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.rol !== 'administrador') return res.status(403).json({ error: 'Sin permisos.' })
+
+  const { error } = await supabaseAdmin.from('atletismo_sorteo').delete().gte('carril', 1)
+  if (error) return res.status(400).json({ error: error.message })
+  return res.json({ ok: true })
+})
+
+// ─── GET /atletismo/participantes?prueba= — atletas de una prueba ──────────
+app.get('/atletismo/participantes', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  const { prueba } = req.query as Record<string, string>
+  if (!prueba) return res.status(400).json({ error: 'prueba es requerida.' })
+
+  const { data, error } = await supabaseAdmin
+    .from('participantes')
+    .select(`
+      id, nombre_completo, posicion,
+      equipos!inner(
+        deporte_id, grado_id,
+        deportes!inner(slug),
+        grados(nombre, pais_asignado)
+      )
+    `)
+    .eq('posicion', prueba)
+    .eq('activo', true)
+    .eq('equipos.deportes.slug', 'atletismo')
+
+  if (error) return res.status(500).json({ error: error.message })
+  return res.json(data ?? [])
+})
+
+// ─── GET /atletismo/resultados?prueba= — resultados de una prueba ──────────
+app.get('/atletismo/resultados', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  const { prueba } = req.query as Record<string, string>
+
+  let query = supabaseAdmin
+    .from('atletismo_resultados')
+    .select(`
+      id, prueba, posicion_final, puntos, participante_id,
+      participantes(nombre_completo, posicion,
+        equipos(grados(nombre, pais_asignado))
+      )
+    `)
+    .order('posicion_final', { ascending: true })
+
+  if (prueba) query = query.eq('prueba', prueba)
+
+  const { data, error } = await query
+  if (error) return res.status(500).json({ error: error.message })
+  return res.json(data ?? [])
+})
+
+// ─── POST /atletismo/resultados — guardar resultados de una prueba ──────────
+app.post('/atletismo/resultados', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.rol !== 'administrador') {
+    return res.status(403).json({ error: 'Solo el administrador puede registrar resultados.' })
+  }
+
+  const { resultados } = req.body as {
+    resultados: { prueba: string; participante_id: string; posicion_final: number; puntos: number }[]
+  }
+
+  if (!resultados || !Array.isArray(resultados) || resultados.length === 0) {
+    return res.status(400).json({ error: 'Se requiere un array de resultados.' })
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('atletismo_resultados')
+    .upsert(resultados, { onConflict: 'prueba,participante_id' })
+    .select()
+
+  if (error) return res.status(400).json({ error: error.message })
+  return res.status(201).json(data)
+})
+
 // ─── DELETE /estadisticas/:id — eliminar estadística individual ────────────
 app.delete('/estadisticas/:id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   if (req.user?.rol !== 'administrador') {

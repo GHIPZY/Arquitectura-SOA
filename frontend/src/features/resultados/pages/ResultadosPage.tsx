@@ -52,6 +52,12 @@ import {
   updateEncuentro,
   type EstadisticaJugador,
 } from '@/services/admin.service'
+import {
+  getAtletismoParticipantes,
+  getAtletismoSorteo,
+  getAtletismoResultados,
+  saveAtletismoResultados,
+} from '@/services/atletismo.service'
 
 // ─── Config por deporte ────────────────────────────────────────────────────
 
@@ -117,6 +123,176 @@ const DEFAULT_CONFIG: DeporteConfig = {
     { field: 'puntos',      label: 'Puntos'      },
     { field: 'asistencias', label: 'Asistencias' },
   ],
+}
+
+const PRUEBAS_ATLETISMO = [
+  'Velocista 100m', 'Velocista 200m', 'Velocista 400m', 'Fondista',
+  'Saltador de Altura', 'Saltador de Longitud', 'Lanzador', 'Marchista',
+]
+const PUNTOS_ATL: Record<number, number> = { 1: 5, 2: 3, 3: 2, 4: 1 }
+function calcPuntosAtl(pos: number) { return PUNTOS_ATL[pos] ?? 0 }
+
+// ─── Panel atletismo ───────────────────────────────────────────────────────
+
+function PanelAtletismo({
+  prueba, isAdmin, onClose, codigoMap,
+}: {
+  prueba: string; isAdmin: boolean; onClose: () => void; codigoMap: Record<string, string>
+}) {
+  const queryClient = useQueryClient()
+  const [posiciones, setPosiciones] = useState<Record<string, number | ''>>({})
+  const [guardando, setGuardando]   = useState(false)
+  const [error, setError]           = useState<string | null>(null)
+  const [success, setSuccess]       = useState(false)
+
+  const { data: participantes = [] } = useQuery({
+    queryKey: ['atletismo-participantes', prueba],
+    queryFn: () => getAtletismoParticipantes(prueba),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: sorteo = [] } = useQuery({
+    queryKey: ['atletismo-sorteo', prueba],
+    queryFn: () => getAtletismoSorteo(prueba),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: resultadosPrueba = [] } = useQuery({
+    queryKey: ['atletismo-resultados', prueba],
+    queryFn: () => getAtletismoResultados(prueba),
+    staleTime: 0,
+  })
+
+  useEffect(() => {
+    const map: Record<string, number | ''> = {}
+    resultadosPrueba.forEach(r => { map[r.participante_id] = r.posicion_final })
+    setPosiciones(map)
+  }, [resultadosPrueba])
+
+  const carrilMap: Record<string, number> = {}
+  sorteo.forEach(s => { carrilMap[s.participante_id] = s.carril })
+
+  const posicionesOcupadas = new Set(
+    Object.entries(posiciones).filter(([, v]) => v !== '').map(([, v]) => v as number)
+  )
+
+  async function handleGuardar() {
+    const asignadas = Object.entries(posiciones).filter(([, v]) => v !== '')
+    const valores = asignadas.map(([, v]) => v as number)
+    if (new Set(valores).size !== valores.length) {
+      setError('Dos atletas no pueden tener la misma posición final.')
+      return
+    }
+    setGuardando(true); setError(null)
+    try {
+      await saveAtletismoResultados(asignadas.map(([pid, pos]) => ({
+        prueba, participante_id: pid,
+        posicion_final: pos as number,
+        puntos: calcPuntosAtl(pos as number),
+      })))
+      queryClient.invalidateQueries({ queryKey: ['atletismo-resultados'] })
+      queryClient.invalidateQueries({ queryKey: ['atletismo-resultados-todos'] })
+      setSuccess(true)
+    } catch (e: unknown) { setError((e as Error).message) }
+    finally { setGuardando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm pt-10 pb-6 px-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wide">Atletismo</p>
+            <h2 className="text-lg font-extrabold text-text">{prueba}</h2>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg text-muted hover:bg-base transition-colors cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        {/* Tabla */}
+        <div className="p-6">
+          {participantes.length === 0 ? (
+            <p className="text-center text-sm text-muted py-8">No hay atletas registrados para esta prueba.</p>
+          ) : (
+            <table className="w-full">
+              <thead className="border-b border-border">
+                <tr>
+                  {['Carril', 'Atleta', 'Grado', 'Pos. Final', 'Puntos'].map(h => (
+                    <th key={h} className="text-left pb-2 text-xs font-semibold text-muted">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {participantes.map(p => {
+                  const pais   = p.equipos?.grados?.pais_asignado ?? null
+                  const codigo = pais ? (codigoMap[pais] ?? '') : ''
+                  const flag   = getFlag(codigo)
+                  const grado  = p.equipos?.grados?.nombre ?? '—'
+                  const carril = carrilMap[p.id] ?? null
+                  const pos    = posiciones[p.id] ?? ''
+                  const pts    = pos !== '' ? calcPuntosAtl(pos as number) : null
+
+                  return (
+                    <tr key={p.id} className="hover:bg-base/40 transition-colors">
+                      <td className="py-3 pr-3">
+                        {carril
+                          ? <span className="w-7 h-7 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">{carril}</span>
+                          : <span className="text-xs text-muted">—</span>}
+                      </td>
+                      <td className="py-3 text-sm font-semibold text-text pr-3">{p.nombre_completo}</td>
+                      <td className="py-3 pr-3">
+                        <div className="flex items-center gap-1.5">
+                          {flag && <img src={flag} alt={pais ?? ''} className="w-5 h-5 rounded object-cover border border-border" />}
+                          <span className="text-xs text-muted">{grado}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 pr-3">
+                        {isAdmin ? (
+                          <select
+                            value={pos}
+                            onChange={e => { setPosiciones(prev => ({ ...prev, [p.id]: e.target.value === '' ? '' : parseInt(e.target.value) })); setSuccess(false) }}
+                            className="pl-2 pr-6 py-1 border border-border rounded-lg text-sm text-text bg-surface outline-none focus:border-primary"
+                          >
+                            <option value="">—</option>
+                            {Array.from({ length: participantes.length }, (_, i) => i + 1).map(n => (
+                              <option key={n} value={n} disabled={posicionesOcupadas.has(n) && posiciones[p.id] !== n}>{n}°</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-sm text-text">{pos !== '' ? `${pos}°` : '—'}</span>
+                        )}
+                      </td>
+                      <td className="py-3">
+                        {pts !== null
+                          ? <span className="text-sm font-bold text-primary">{pts} pts</span>
+                          : <span className="text-sm text-muted">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+
+          {isAdmin && participantes.length > 0 && (
+            <div className="mt-5 flex items-center justify-between">
+              <div>
+                {error   && <p className="text-xs text-red-500">{error}</p>}
+                {success && <p className="text-xs text-success">Guardado correctamente.</p>}
+              </div>
+              <button onClick={handleGuardar} disabled={guardando}
+                className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 transition-colors disabled:opacity-60 cursor-pointer">
+                {guardando ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Guardar posiciones
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
@@ -799,6 +975,7 @@ export function ResultadosPage() {
   const [deporteId, setDeporteId]         = useState('todos')
   const [estadoFiltro, setEstadoFiltro]   = useState('todos')
   const [encuentroSel, setEncuentroSel]   = useState<EncuentroDB | null>(null)
+  const [pruebaSel, setPruebaSel]         = useState<string | null>(null)
 
   const { data: gradosPaises = [] } = useQuery({
     queryKey: ['grados-paises'],
@@ -814,6 +991,18 @@ export function ResultadosPage() {
     staleTime: 10 * 60 * 1000,
   })
 
+  const deporteSeleccionado = deportes.find(d => d.id === deporteId)
+  const esAtletismo = deporteSeleccionado?.slug === 'atletismo'
+
+  // Resultados de atletismo por prueba para mostrar estado (con/sin resultado)
+  const { data: atletismoResultados = [] } = useQuery({
+    queryKey: ['atletismo-resultados-todos'],
+    queryFn: () => getAtletismoResultados(),
+    enabled: esAtletismo,
+    staleTime: 30_000,
+  })
+  const pruebasConResultado = new Set(atletismoResultados.map(r => r.prueba))
+
   const { data: encuentros = [], isLoading } = useQuery<EncuentroDB[]>({
     queryKey: ['encuentros', deporteId, estadoFiltro],
     queryFn: () => getEncuentros({
@@ -828,6 +1017,16 @@ export function ResultadosPage() {
       title="Resultados y Estadísticas"
       subtitle={isAdmin ? "Registra los resultados y estadísticas individuales de cada encuentro" : "Consulta los marcadores y estadísticas de cada encuentro"}
     >
+      {/* Panel atletismo */}
+      {pruebaSel && (
+        <PanelAtletismo
+          prueba={pruebaSel}
+          isAdmin={isAdmin}
+          onClose={() => setPruebaSel(null)}
+          codigoMap={codigoMap}
+        />
+      )}
+
       {/* Panel del encuentro seleccionado */}
       {encuentroSel && (
         <PanelEncuentro
@@ -876,8 +1075,39 @@ export function ResultadosPage() {
           </div>
         </div>
 
+        {/* Vista atletismo */}
+        {esAtletismo && (
+          <div className="bg-surface border border-border rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-border">
+              <p className="text-sm font-semibold text-text">Pruebas de atletismo</p>
+            </div>
+            <div className="divide-y divide-border">
+              {PRUEBAS_ATLETISMO.map(prueba => {
+                const tieneResultado = pruebasConResultado.has(prueba)
+                return (
+                  <div key={prueba} className="flex items-center justify-between px-5 py-3.5 hover:bg-base/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm font-semibold text-text">{prueba}</p>
+                      {tieneResultado
+                        ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">Finalizado</span>
+                        : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">Pendiente</span>
+                      }
+                    </div>
+                    <button
+                      onClick={() => setPruebaSel(prueba)}
+                      className="px-4 py-1.5 text-xs font-bold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors cursor-pointer"
+                    >
+                      Gestionar
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Lista de encuentros */}
-        <div className="bg-surface border border-border rounded-xl overflow-hidden">
+        {!esAtletismo && (<div className="bg-surface border border-border rounded-xl overflow-hidden">
           {isLoading ? (
             <div className="flex items-center gap-3 py-16 justify-center text-muted">
               <Loader2 size={20} className="animate-spin" /> Cargando encuentros...
@@ -958,7 +1188,8 @@ export function ResultadosPage() {
               </tbody>
             </table>
           )}
-        </div>
+        </div>)}
+
       </div>
     </MainLayout>
   )
