@@ -13,6 +13,9 @@ import { PosicionesPage }      from './features/posiciones/pages/PosicionesPage'
 import { EstadisticasPage }   from './features/estadisticas/pages/EstadisticasPage'
 import { AtletismoPage }      from './features/atletismo/pages/AtletismoPage'
 import { useCurrentUser }    from './shared/context/UserContext'
+import { PublicEncuentrosPage } from './features/publico/pages/PublicEncuentrosPage'
+import { PublicPosicionesPage } from './features/publico/pages/PublicPosicionesPage'
+import { PublicGoleadoresPage } from './features/publico/pages/PublicGoleadoresPage'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useCurrentUser()
@@ -50,6 +53,11 @@ function App() {
       <Route path="/posiciones"    element={<AuthGuard><PosicionesPage /></AuthGuard>} />
       <Route path="/estadisticas"  element={<AuthGuard><EstadisticasPage /></AuthGuard>} />
       <Route path="/atletismo"     element={<AuthGuard><AtletismoPage /></AuthGuard>} />
+      {/* Vista pública — espectador sin login */}
+      <Route path="/publico"            element={<Navigate to="/publico/encuentros" replace />} />
+      <Route path="/publico/encuentros" element={<PublicEncuentrosPage />} />
+      <Route path="/publico/posiciones" element={<PublicPosicionesPage />} />
+      <Route path="/publico/goleadores" element={<PublicGoleadoresPage />} />
     </Routes>
   )
 }
