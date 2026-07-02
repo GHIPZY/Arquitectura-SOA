@@ -76,7 +76,7 @@ export function DashboardPage() {
   ]
 
   return (
-    <MainLayout title={`Bienvenido${user ? ', ' + user.nombre : ''}`} subtitle="Panel de control del torneo Olimpiadas Perú 2026">
+    <MainLayout title={`Bienvenido${user ? ', ' + user.nombre : ''}`} subtitle={`Panel de control del torneo ${config?.nombre_torneo ?? ''} ${config?.anio_torneo ?? ''}`.trim()}>
 
       {/* Stats */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
@@ -202,7 +202,7 @@ export function DashboardPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted">Evento</span>
-                <span className="text-xs font-medium text-text">Olimpiadas Perú 2026</span>
+                <span className="text-xs font-medium text-text">{config?.nombre_torneo ?? '—'} {config?.anio_torneo ?? ''}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted">Inscripciones</span>

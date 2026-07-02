@@ -46,9 +46,12 @@ export function ConfiguracionPage() {
   })
 
   const [draft, setDraft] = useState<Partial<AppConfig>>({})
-  const [saving, setSaving]   = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [error, setError]     = useState<string | null>(null)
+  const [savingTorneo, setSavingTorneo]           = useState(false)
+  const [successTorneo, setSuccessTorneo]         = useState(false)
+  const [errorTorneo, setErrorTorneo]             = useState<string | null>(null)
+  const [savingInscr, setSavingInscr]             = useState(false)
+  const [successInscr, setSuccessInscr]           = useState(false)
+  const [errorInscr, setErrorInscr]               = useState<string | null>(null)
 
   // Deportes — límites editables
   type DeporteDraft = { max_participantes: number; min_participantes: number }
@@ -95,26 +98,39 @@ export function ConfiguracionPage() {
 
   function set(key: keyof AppConfig, value: string | null) {
     setDraft(prev => ({ ...prev, [key]: value }))
-    setSuccess(false)
-    setError(null)
+    setSuccessTorneo(false)
+    setSuccessInscr(false)
   }
 
-  async function handleGuardar() {
-    setSaving(true)
-    setError(null)
-    setSuccess(false)
+  async function handleGuardarTorneo() {
+    setSavingTorneo(true)
+    setErrorTorneo(null)
+    setSuccessTorneo(false)
     try {
       await setConfig(draft)
       queryClient.invalidateQueries({ queryKey: ['config'] })
-      setSuccess(true)
+      setSuccessTorneo(true)
     } catch (e: unknown) {
-      setError((e as Error).message)
+      setErrorTorneo((e as Error).message)
     } finally {
-      setSaving(false)
+      setSavingTorneo(false)
     }
   }
 
-  const hayDraft = JSON.stringify(draft) !== JSON.stringify(config)
+  async function handleGuardarInscripciones() {
+    setSavingInscr(true)
+    setErrorInscr(null)
+    setSuccessInscr(false)
+    try {
+      await setConfig(draft)
+      queryClient.invalidateQueries({ queryKey: ['config'] })
+      setSuccessInscr(true)
+    } catch (e: unknown) {
+      setErrorInscr((e as Error).message)
+    } finally {
+      setSavingInscr(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -163,6 +179,18 @@ export function ConfiguracionPage() {
                 />
               </div>
             </div>
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                onClick={handleGuardarTorneo}
+                disabled={savingTorneo}
+                className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {savingTorneo ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {savingTorneo ? 'Guardando...' : 'Guardar'}
+              </button>
+              {errorTorneo && <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle size={12} />{errorTorneo}</p>}
+              {successTorneo && <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 size={12} />Guardado</p>}
+            </div>
           </Seccion>
 
           {/* Inscripciones */}
@@ -198,6 +226,18 @@ export function ConfiguracionPage() {
                   Esta fecha ya pasó — las inscripciones están cerradas.
                 </p>
               )}
+            </div>
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                onClick={handleGuardarInscripciones}
+                disabled={savingInscr}
+                className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {savingInscr ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {savingInscr ? 'Guardando...' : 'Guardar'}
+              </button>
+              {errorInscr && <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle size={12} />{errorInscr}</p>}
+              {successInscr && <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 size={12} />Guardado</p>}
             </div>
           </Seccion>
 
@@ -300,26 +340,6 @@ export function ConfiguracionPage() {
               </div>
             </div>
 
-            <div className="pt-4 mt-5 space-y-3 border-t border-border">
-              {error && (
-                <div className="flex items-center gap-2 px-1 text-xs text-red-600">
-                  <AlertTriangle size={13} /> {error}
-                </div>
-              )}
-              {success && (
-                <div className="flex items-center gap-2 px-3 py-2 text-xs border text-success bg-success/10 border-success/20 rounded-xl">
-                  <CheckCircle2 size={13} /> Configuración guardada
-                </div>
-              )}
-              <button
-                onClick={handleGuardar}
-                disabled={saving || !hayDraft}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-              >
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {saving ? 'Guardando...' : 'Guardar cambios'}
-              </button>
-            </div>
           </div>
         </div>
 
