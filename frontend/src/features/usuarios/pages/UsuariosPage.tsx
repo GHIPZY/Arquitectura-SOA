@@ -13,8 +13,7 @@ const PAIS_IMGS = import.meta.glob('/src/assets/paises/*.webp', {
 function getFlag(codigo: string) {
   return PAIS_IMGS[`/src/assets/paises/${codigo.toLowerCase()}.webp`] ?? null
 }
-import { getUsuarios, crearUsuario, eliminarUsuario, type UsuarioAdmin } from '@/services/usuarios.service'
-import { getDeportes } from '@/services/deportes.service'
+import { getUsuarios, crearUsuario, eliminarUsuario } from '@/services/usuarios.service'
 
 // Reutilizamos el endpoint de grados via deportes-service si existe, si no los leemos de usuarios
 async function getGrados() {
@@ -112,6 +111,12 @@ export function UsuariosPage() {
   const coordinadores = usuarios.filter(u => u.rol === 'coordinador')
   const espectadores  = usuarios.filter(u => u.rol === 'espectador')
 
+  // Grados que ya tienen coordinador asignado
+  const gradosOcupados = new Set(
+    coordinadores.map(u => u.grado).filter(Boolean)
+  )
+  const gradosDisponibles = grados.filter(g => !gradosOcupados.has(g.nombre))
+
   return (
     <MainLayout title="Gestión de acceso" subtitle="Crea y administra las cuentas de coordinadores y espectadores">
       <div className="space-y-5">
@@ -201,7 +206,7 @@ export function UsuariosPage() {
                       className="w-full px-3 py-2.5 text-sm border border-border rounded-xl bg-base text-text outline-none focus:border-primary transition-colors"
                     >
                       <option value="">Sin asignar</option>
-                      {grados.map(g => (
+                      {gradosDisponibles.map(g => (
                         <option key={g.id} value={g.id}>
                           {g.nombre}{g.pais_asignado ? ` — ${g.pais_asignado}` : ''}
                         </option>

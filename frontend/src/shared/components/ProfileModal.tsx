@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { X, User, Mail, GraduationCap, Lock, Eye, EyeOff, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { getAuthHeaders } from '@/services/auth.service'
 import { useCurrentUser } from '@/shared/context/UserContext'
 
 interface Props {
@@ -10,34 +10,41 @@ interface Props {
 export function ProfileModal({ onClose }: Props) {
   const { user } = useCurrentUser()
 
-  const [newPassword, setNewPassword]       = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword]         = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [showNew, setShowNew]               = useState(false)
-  const [showConfirm, setShowConfirm]       = useState(false)
-  const [loading, setLoading]               = useState(false)
-  const [success, setSuccess]               = useState(false)
-  const [error, setError]                   = useState<string | null>(null)
+  const [showCurrent, setShowCurrent]         = useState(false)
+  const [showNew, setShowNew]                 = useState(false)
+  const [showConfirm, setShowConfirm]         = useState(false)
+  const [loading, setLoading]                 = useState(false)
+  const [success, setSuccess]                 = useState(false)
+  const [error, setError]                     = useState<string | null>(null)
 
   async function handleChangePassword() {
     setError(null)
     setSuccess(false)
-    if (newPassword.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.')
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setError('Las contraseñas no coinciden.')
-      return
-    }
+    if (!currentPassword) { setError('Ingresa tu contraseña actual.'); return }
+    if (newPassword.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return }
+    if (newPassword === currentPassword) { setError('La nueva contraseña no puede ser igual a la actual.'); return }
+    if (newPassword !== confirmPassword) { setError('Las contraseñas no coinciden.'); return }
     setLoading(true)
-    const { error: err } = await supabase.auth.updateUser({ password: newPassword })
-    setLoading(false)
-    if (err) {
-      setError(err.message)
-    } else {
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch('/api/encuentros/me/password', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ passwordActual: currentPassword, passwordNueva: newPassword }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Error al actualizar contraseña')
       setSuccess(true)
+      setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
+    } catch (e: unknown) {
+      setError((e as Error).message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -106,6 +113,24 @@ export function ProfileModal({ onClose }: Props) {
             <div className="relative">
               <Lock size={14} className="absolute -translate-y-1/2 left-3 top-1/2 text-muted" />
               <input
+                type={showCurrent ? 'text' : 'password'}
+                placeholder="Contraseña actual"
+                value={currentPassword}
+                onChange={e => { setCurrentPassword(e.target.value); setSuccess(false); setError(null) }}
+                className="w-full pl-9 pr-10 py-2.5 text-sm border border-border rounded-xl bg-surface text-text outline-none focus:border-primary transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrent(v => !v)}
+                className="absolute -translate-y-1/2 cursor-pointer right-3 top-1/2 text-muted hover:text-text"
+              >
+                {showCurrent ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+
+            <div className="relative">
+              <Lock size={14} className="absolute -translate-y-1/2 left-3 top-1/2 text-muted" />
+              <input
                 type={showNew ? 'text' : 'password'}
                 placeholder="Nueva contraseña"
                 value={newPassword}
@@ -152,7 +177,7 @@ export function ProfileModal({ onClose }: Props) {
 
             <button
               onClick={handleChangePassword}
-              disabled={loading || !newPassword || !confirmPassword}
+              disabled={loading || !currentPassword || !newPassword || !confirmPassword}
               className="w-full py-2.5 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               {loading ? 'Guardando...' : 'Actualizar contraseña'}

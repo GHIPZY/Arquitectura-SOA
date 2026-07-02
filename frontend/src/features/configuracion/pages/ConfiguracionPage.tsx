@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
-import { Settings, Calendar, Trophy, Dumbbell, Save, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Calendar, Trophy, Dumbbell, Save, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { getConfig, setConfig, type AppConfig } from '@/services/config.service'
 import { getDeportes } from '@/services/deportes.service'
 import { getAuthHeaders } from '@/services/auth.service'
@@ -28,6 +28,12 @@ function Seccion({ icon, title, description, children }: SeccionProps) {
       {children}
     </div>
   )
+}
+
+function toLocalInput(iso: string): string {
+  const d = new Date(iso)
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
 }
 
 export function ConfiguracionPage() {
@@ -171,7 +177,7 @@ export function ConfiguracionPage() {
                 <input
                   type="datetime-local"
                   value={draft.fecha_limite_inscripciones
-                    ? draft.fecha_limite_inscripciones.slice(0, 16)
+                    ? toLocalInput(draft.fecha_limite_inscripciones)
                     : ''}
                   onChange={e => set('fecha_limite_inscripciones', e.target.value
                     ? new Date(e.target.value).toISOString()

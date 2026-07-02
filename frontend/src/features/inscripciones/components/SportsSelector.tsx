@@ -81,7 +81,7 @@ export function SportsSelector({
                   className="
                     absolute
                     inset-0
-                    bg-gradient-to-r
+                    bg-linear-to-r
                     from-secondary/5
                     to-transparent
                     pointer-events-none

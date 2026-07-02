@@ -68,6 +68,7 @@ interface DeporteConfig {
   scoreLabel:      string
   cols:            StatColConfig[]
   pingpongMode?:   boolean  // enfrentamientos 1v1, marcador automático
+  noEmpate?:       boolean  // no se permite empate (ej: básquet)
 }
 
 const DEPORTE_CONFIG: Record<string, DeporteConfig> = {
@@ -82,8 +83,9 @@ const DEPORTE_CONFIG: Record<string, DeporteConfig> = {
   },
   basquet: {
     scoreLabel: 'Puntos',
+    noEmpate: true,
     cols: [
-      { field: 'puntos',      label: 'Puntos'      },
+      { field: 'puntos',      label: 'Puntos', sumDebeIgualMarcador: true },
       { field: 'asistencias', label: 'Asistencias' },
     ],
   },
@@ -253,8 +255,7 @@ function PanelEncuentro({
     setStatsRows(prev => ({
       ...prev,
       [jugadorId]: {
-        participante_id: jugadorId, nombre: '', posicion: null,
-        puntos: 0, asistencias: 0, tarjetas_amarillas: 0, tarjetas_rojas: 0,
+        ...{ participante_id: jugadorId, nombre: '', posicion: null, puntos: 0, asistencias: 0, tarjetas_amarillas: 0, tarjetas_rojas: 0 },
         ...prev[jugadorId],
         [field]: Math.max(0, value),
       },
@@ -263,6 +264,16 @@ function PanelEncuentro({
 
   // ── Guardar resultado + estadísticas (acción única) ────────────────────
   async function handleGuardar() {
+    // Validar que el partido ya haya comenzado
+    if (encuentro.fecha_hora && new Date() < new Date(encuentro.fecha_hora)) {
+      const fechaLegible = new Date(encuentro.fecha_hora).toLocaleString('es-PE', {
+        day: '2-digit', month: 'long', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+      setError(`El partido aún no ha comenzado. Está programado para el ${fechaLegible}. Cambia la fecha del encuentro si deseas registrar resultados antes.`)
+      return
+    }
+
     let pl: number, pv: number
 
     if (isPingPong) {
@@ -292,7 +303,12 @@ function PanelEncuentro({
         return
       }
 
-      // Validar coherencia goles (solo fútbol)
+      if (sportCfg.noEmpate && pl === pv) {
+        setError('En básquet no puede haber empate. Revisa el marcador.')
+        return
+      }
+
+      // Validar coherencia puntos individuales vs marcador
       const colConSuma = sportCfg.cols.find(c => c.sumDebeIgualMarcador)
       if (colConSuma) {
         const sumaLocal     = jugadoresLocal.reduce((s, j)     => s + (statsRows[j.id]?.[colConSuma.field] ?? 0), 0)

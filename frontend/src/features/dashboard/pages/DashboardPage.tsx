@@ -6,6 +6,9 @@ import { useCurrentUser } from '@/shared/context/UserContext'
 import { getEncuentrosHoy } from '@/services/encuentros.service'
 import { getEquipos } from '@/services/equipos.service'
 import { getParticipantesCount } from '@/services/participantes.service'
+import { getConfig } from '@/services/config.service'
+import { getPaisesDisponibles } from '@/services/instituciones.service'
+import { BanderaPais } from '@/shared/components/BanderaPais'
 
 import equipoIcon from '@/assets/icons/slide/equipo.png'
 import participantesIcon from '@/assets/icons/slide/participantes.png'
@@ -46,6 +49,24 @@ export function DashboardPage() {
     queryFn: getEncuentrosHoy,
     staleTime: 2 * 60 * 1000,
   })
+
+  const { data: config } = useQuery({
+    queryKey: ['config'],
+    queryFn: getConfig,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const inscripcionesAbiertas = !config?.fecha_limite_inscripciones
+    || new Date() < new Date(config.fecha_limite_inscripciones)
+
+  const { data: paisesDisponibles = [] } = useQuery({
+    queryKey: ['paises-disponibles'],
+    queryFn: getPaisesDisponibles,
+    staleTime: 30 * 60 * 1000,
+  })
+
+  const codigoMap: Record<string, string> = {}
+  paisesDisponibles.forEach(gp => { codigoMap[gp.pais] = gp.codigo })
 
   const stats = [
     { label: 'Equipos registrados', value: equipos.length,       icon: registroIcon      },
@@ -110,6 +131,10 @@ export function DashboardPage() {
                   const resultado = e.resultados?.[0] ?? null
                   const nombreL   = e.equipo_local?.grados?.nombre ?? '—'
                   const nombreV   = e.equipo_visitante?.grados?.nombre ?? '—'
+                  const paisL     = e.equipo_local?.grados?.pais_asignado ?? null
+                  const paisV     = e.equipo_visitante?.grados?.pais_asignado ?? null
+                  const codigoL   = paisL ? (codigoMap[paisL] ?? '') : ''
+                  const codigoV   = paisV ? (codigoMap[paisV] ?? '') : ''
                   return (
                     <tr key={e.id} className="hover:bg-base/50 transition-colors">
                       <td className="px-4 py-3 text-xs text-muted font-medium">{hora}</td>
@@ -118,11 +143,21 @@ export function DashboardPage() {
                           {ESTADO_LABEL[e.estado] ?? e.estado}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs font-semibold text-text">{nombreL}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {codigoL && <BanderaPais codigo={codigoL} size="sm" />}
+                          <span className="text-xs font-semibold text-text">{nombreL}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-xs font-bold text-text text-center">
                         {resultado ? `${resultado.puntos_local} - ${resultado.puntos_visitante}` : 'vs'}
                       </td>
-                      <td className="px-4 py-3 text-xs font-semibold text-text">{nombreV}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {codigoV && <BanderaPais codigo={codigoV} size="sm" />}
+                          <span className="text-xs font-semibold text-text">{nombreV}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-xs text-muted">{e.deportes?.nombre ?? '—'}</td>
                     </tr>
                   )
@@ -171,10 +206,17 @@ export function DashboardPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted">Inscripciones</span>
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-success">
-                  <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
-                  Abiertas
-                </span>
+                {inscripcionesAbiertas ? (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-success">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
+                    Abiertas
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-error">
+                    <span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />
+                    Cerradas
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted">Tu rol</span>

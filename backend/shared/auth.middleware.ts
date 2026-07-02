@@ -10,6 +10,17 @@ export interface AuthenticatedRequest extends Request {
   token?: string
 }
 
+function decodeJwtPayload(token: string): { sub?: string; exp?: number; email?: string } | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
+    return payload
+  } catch {
+    return null
+  }
+}
+
 export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
 
@@ -18,20 +29,26 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
   }
 
   const token = authHeader.split(' ')[1]
+  if (!token) return res.status(401).json({ error: 'Token vacío.' })
 
   try {
-    // Validar el token directamente contra Supabase Auth
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+    // Decodificar JWT localmente sin llamada de red
+    const payload = decodeJwtPayload(token)
 
-    if (error || !user) {
-      return res.status(401).json({ error: 'Sesión inválida o expirada.' })
+    if (!payload || !payload.sub) {
+      return res.status(401).json({ error: 'Token inválido.' })
     }
 
-    // Obtener el rol del usuario desde la tabla de base de datos 'usuarios'
+    // Verificar expiración
+    if (payload.exp && payload.exp < Date.now() / 1000) {
+      return res.status(401).json({ error: 'Sesión expirada.' })
+    }
+
+    // Obtener el rol del usuario desde la base de datos (usa service_role, no hace auth remota)
     const { data: dbUser, error: dbError } = await supabaseAdmin
       .from('usuarios')
       .select('rol')
-      .eq('id', user.id)
+      .eq('id', payload.sub)
       .single()
 
     if (dbError || !dbUser) {
@@ -39,8 +56,8 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     }
 
     req.user = {
-      id: user.id,
-      email: user.email,
+      id: payload.sub,
+      email: payload.email,
       rol: dbUser.rol as 'administrador' | 'coordinador' | 'espectador' | 'arbitro'
     }
     req.token = token

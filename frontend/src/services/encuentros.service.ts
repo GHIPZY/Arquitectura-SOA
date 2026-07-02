@@ -4,7 +4,7 @@ export interface EncuentroDB {
   id: string
   fecha_hora: string
   estado: 'programado' | 'en_curso' | 'finalizado' | 'postergado'
-  deportes: { id: string; nombre: string } | null
+  deportes: { id: string; nombre: string; slug: string } | null
   equipo_local: { id: string; nombre_equipo: string; grados: { nombre: string; pais_asignado: string } | null } | null
   equipo_visitante: { id: string; nombre_equipo: string; grados: { nombre: string; pais_asignado: string } | null } | null
   resultados: { encuentro_id: string; puntos_local: number; puntos_visitante: number }[] | null

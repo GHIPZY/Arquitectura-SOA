@@ -23,6 +23,7 @@ export function PerfilPage() {
     setSuccess(false)
     if (!currentPassword) { setError('Ingresa tu contraseña actual.'); return }
     if (newPassword.length < 6) { setError('La nueva contraseña debe tener al menos 6 caracteres.'); return }
+    if (newPassword === currentPassword) { setError('La nueva contraseña no puede ser igual a la actual.'); return }
     if (newPassword !== confirmPassword) { setError('Las contraseñas no coinciden.'); return }
     setLoading(true)
     try {

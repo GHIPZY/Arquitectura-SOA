@@ -55,7 +55,7 @@ export function CountriesList({
               key={pais.nombre}
               onClick={() => onSelect(pais.nombre)}
               className={`
-                flex-shrink-0
+                shrink-0
                 w-52
                 p-4
                 rounded-2xl
@@ -143,7 +143,7 @@ export function CountriesList({
         <div
           onClick={onNewPais}
           className="
-            flex-shrink-0
+            shrink-0
             w-44
             rounded-2xl
             border-2

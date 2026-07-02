@@ -37,6 +37,21 @@ app.get('/deportes/:id', requireAuth as any, async (req: AuthenticatedRequest, r
   return res.json(data)
 })
 
+// PUT /deportes/:id — actualiza min/max participantes
+app.put('/deportes/:id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  const { max_participantes, min_participantes } = req.body as { max_participantes?: number; min_participantes?: number }
+
+  const { data, error } = await supabaseAdmin
+    .from('deportes')
+    .update({ max_participantes, min_participantes })
+    .eq('id', req.params.id)
+    .select()
+    .single()
+
+  if (error) return res.status(500).json({ error: error.message })
+  return res.json(data)
+})
+
 app.listen(PORT, () => {
   console.log(`[Deportes Service] corriendo en http://localhost:${PORT}`)
 })

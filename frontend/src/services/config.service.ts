@@ -8,8 +8,7 @@ export interface AppConfig {
 }
 
 export async function getConfig(): Promise<AppConfig> {
-  const headers = await getAuthHeaders()
-  const res = await fetch('/api/encuentros/config', { headers })
+  const res = await fetch('/api/encuentros/config')
   if (!res.ok) return {
     fecha_limite_inscripciones: null,
     nombre_torneo: null,

@@ -1,10 +1,20 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Pencil, Check, X, Loader2 } from 'lucide-react'
 import { BanderaPais } from '@/shared/components/BanderaPais'
 import { getEncuentros, type EncuentroDB } from '@/services/encuentros.service'
 import { getDeportes } from '@/services/deportes.service'
+import { getAuthHeaders } from '@/services/auth.service'
+import { updateEncuentro } from '@/services/admin.service'
+import { useCurrentUser } from '@/shared/context/UserContext'
+
+async function getGradosPaises(): Promise<{ pais: string; codigo: string }[]> {
+  const headers = await getAuthHeaders()
+  const res = await fetch('/api/instituciones/paises-disponibles', { headers })
+  if (!res.ok) return []
+  return res.json()
+}
 
 import deportesIcon from '@/assets/icons/slide/deportes.png'
 import programadosIcon from '@/assets/icons/slide/programdos.png'
@@ -45,15 +55,40 @@ function formatFecha(iso: string) {
   }
 }
 
+function toLocalInput(iso: string): string {
+  // Siempre mostrar en hora peruana (UTC-5), independiente del TZ del navegador
+  const d = new Date(iso)
+  const peru = new Date(d.getTime() - 5 * 60 * 60 * 1000)
+  return peru.toISOString().slice(0, 16)
+}
+
 export function EncuentrosPage() {
+  const { user } = useCurrentUser()
+  const queryClient = useQueryClient()
+  const isAdmin = user?.rol === 'administrador'
+
   const [deporteId, setDeporteId]     = useState('todos')
   const [estadoFiltro, setEstadoFiltro] = useState('todos')
+
+  // Edición de fecha (solo admin)
+  const [editandoId, setEditandoId]   = useState<string | null>(null)
+  const [nuevaFecha, setNuevaFecha]   = useState('')
+  const [guardando, setGuardando]     = useState(false)
 
   const { data: deportes = [] } = useQuery({
     queryKey: ['deportes'],
     queryFn: getDeportes,
     staleTime: 10 * 60 * 1000,
   })
+
+  const { data: gradosPaises = [] } = useQuery({
+    queryKey: ['grados-paises'],
+    queryFn: getGradosPaises,
+    staleTime: 60 * 60 * 1000,
+  })
+
+  const codigoMap: Record<string, string> = {}
+  gradosPaises.forEach(gp => { codigoMap[gp.pais] = gp.codigo })
 
   const { data: encuentros = [], isLoading } = useQuery<EncuentroDB[]>({
     queryKey: ['encuentros', deporteId, estadoFiltro],
@@ -67,6 +102,29 @@ export function EncuentrosPage() {
     acc[key] = encuentros.filter(e => e.estado === key).length
     return acc
   }, {} as Record<Estado, number>)
+
+  function iniciarEdicion(e: EncuentroDB) {
+    setEditandoId(e.id)
+    setNuevaFecha(toLocalInput(e.fecha_hora))
+  }
+
+  async function guardarFecha() {
+    if (!editandoId || !nuevaFecha) return
+    setGuardando(true)
+    try {
+      // nuevaFecha viene del input (hora peruana UTC-5) → convertir a UTC explícitamente
+      // Al cambiar la fecha, resetear a programado (puede haber quedado en_curso prematuramente)
+      await updateEncuentro(editandoId, {
+        fecha_hora: new Date(nuevaFecha + '-05:00').toISOString(),
+        estado: 'programado',
+      })
+      queryClient.invalidateQueries({ queryKey: ['encuentros'] })
+      queryClient.invalidateQueries({ queryKey: ['encuentros-hoy'] })
+      setEditandoId(null)
+    } finally {
+      setGuardando(false)
+    }
+  }
 
   return (
     <MainLayout title="Consulta de Encuentros" subtitle="Consulta todos los encuentros programados del torneo">
@@ -128,7 +186,7 @@ export function EncuentrosPage() {
           <table className="w-full">
             <thead className="bg-base border-b border-border">
               <tr>
-                {['Fecha y Hora', 'Local', 'vs', 'Visitante', 'Deporte', 'Estado'].map(h => (
+                {['Fecha y Hora', 'Local', 'vs', 'Visitante', 'Deporte', 'Estado', ...(isAdmin ? [''] : [])].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted">{h}</th>
                 ))}
               </tr>
@@ -137,20 +195,38 @@ export function EncuentrosPage() {
               {encuentros.map(e => {
                 const { dia, mes, hora } = formatFecha(e.fecha_hora)
                 const resultado = e.resultados?.[0] ?? null
-                const codigoL  = e.equipo_local?.grados?.pais_asignado ?? ''
-                const codigoV  = e.equipo_visitante?.grados?.pais_asignado ?? ''
-                const nombreL  = e.equipo_local?.nombre_equipo ?? '—'
-                const nombreV  = e.equipo_visitante?.nombre_equipo ?? '—'
+                const paisL    = e.equipo_local?.grados?.pais_asignado ?? null
+                const paisV    = e.equipo_visitante?.grados?.pais_asignado ?? null
+                const codigoL  = paisL ? (codigoMap[paisL] ?? '') : ''
+                const codigoV  = paisV ? (codigoMap[paisV] ?? '') : ''
+                const gradoL   = e.equipo_local?.grados?.nombre  ?? e.equipo_local?.nombre_equipo  ?? '—'
+                const gradoV   = e.equipo_visitante?.grados?.nombre ?? e.equipo_visitante?.nombre_equipo ?? '—'
+                const editando = editandoId === e.id
+
                 return (
                   <tr key={e.id} className="hover:bg-base/50 transition-colors">
                     <td className="px-4 py-3">
-                      <p className="text-sm font-bold text-text">{dia}</p>
-                      <p className="text-xs text-muted">{mes} · {hora}</p>
+                      {editando ? (
+                        <input
+                          type="datetime-local"
+                          value={nuevaFecha}
+                          onChange={ev => setNuevaFecha(ev.target.value)}
+                          className="text-xs border border-border rounded-lg px-2 py-1 bg-surface text-text outline-none focus:border-primary"
+                        />
+                      ) : (
+                        <>
+                          <p className="text-sm font-bold text-text">{dia}</p>
+                          <p className="text-xs text-muted">{mes} · {hora}</p>
+                        </>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {codigoL && <BanderaPais codigo={codigoL} />}
-                        <span className="text-sm font-bold text-text">{nombreL.toUpperCase()}</span>
+                        <div>
+                          <p className="text-sm font-bold text-text leading-tight">{gradoL}</p>
+                          {paisL && <p className="text-[10px] text-muted">{paisL}</p>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -163,7 +239,10 @@ export function EncuentrosPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {codigoV && <BanderaPais codigo={codigoV} />}
-                        <span className="text-sm font-bold text-text">{nombreV.toUpperCase()}</span>
+                        <div>
+                          <p className="text-sm font-bold text-text leading-tight">{gradoV}</p>
+                          {paisV && <p className="text-[10px] text-muted">{paisV}</p>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -174,6 +253,27 @@ export function EncuentrosPage() {
                         {ESTADO_CFG[e.estado].label}
                       </span>
                     </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3">
+                        {editando ? (
+                          <div className="flex items-center gap-1">
+                            <button onClick={guardarFecha} disabled={guardando}
+                              className="p-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-60 cursor-pointer">
+                              {guardando ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                            </button>
+                            <button onClick={() => setEditandoId(null)}
+                              className="p-1.5 rounded-lg text-muted hover:bg-base transition-colors cursor-pointer">
+                              <X size={13} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button onClick={() => iniciarEdicion(e)}
+                            className="p-1.5 rounded-lg text-muted hover:text-text hover:bg-base transition-colors cursor-pointer">
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 )
               })}

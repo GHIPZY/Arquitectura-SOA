@@ -52,6 +52,10 @@ app.post('/resultados', requireAuth as any, async (req: AuthenticatedRequest, re
     .single()
 
   if (error) return res.status(400).json({ error: error.message })
+
+  // Marcar el encuentro como finalizado
+  await supabaseAdmin.from('encuentros').update({ estado: 'finalizado' }).eq('id', encuentro_id)
+
   return res.status(201).json(data)
 })
 

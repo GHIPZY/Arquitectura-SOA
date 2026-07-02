@@ -39,7 +39,7 @@ export function Sidebar() {
   }, [])
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    try { await supabase.auth.signOut() } catch { /* sesión ya expirada */ }
     navigate('/login')
   }
 

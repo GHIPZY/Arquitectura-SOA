@@ -51,6 +51,12 @@ export async function regenerarTorneo(deporte_id: string): Promise<GenerarTorneo
   return json
 }
 
+export async function eliminarSorteo(deporte_id: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`/api/encuentros/encuentros/deporte/${deporte_id}`, { method: 'DELETE', headers })
+  if (!res.ok) { const j = await res.json(); throw new Error(j.error ?? 'Error al eliminar sorteo') }
+}
+
 export async function updateEncuentro(
   id: string,
   body: { fecha_hora?: string; estado?: string }

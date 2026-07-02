@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
-import { Info, Pencil, Trash2, UserPlus, Users, ChevronDown, Dices, Loader2, Save } from 'lucide-react'
+import { Info, Pencil, Trash2, UserPlus, Users, ChevronDown, Dices, Loader2, Save, Lock } from 'lucide-react'
 import { BanderaPais } from '@/shared/components/BanderaPais'
 import { SorteoStage } from '@/shared/components/SorteoStage'
 import { DadosAnimation } from '@/shared/components/DadosAnimation'
@@ -10,6 +10,7 @@ import { getPaisActual } from '@/services/instituciones.service'
 import { getDeportes, type DeporteDB } from '@/services/deportes.service'
 import { getEquipos, createEquipo, deleteEquipo, type EquipoDB } from '@/services/equipos.service'
 import { getParticipantes, createParticipante, updateParticipante, deleteParticipante } from '@/services/participantes.service'
+import { getConfig } from '@/services/config.service'
 
 // Emoji por slug — único dato visual que no vive en la BD
 const EMOJI_MAP: Record<string, string> = {
@@ -109,6 +110,15 @@ export function EquiposPage() {
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
   })
+
+  const { data: config } = useQuery({
+    queryKey: ['config'],
+    queryFn: getConfig,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const inscripcionesCerradas = !!config?.fecha_limite_inscripciones
+    && new Date() >= new Date(config.fecha_limite_inscripciones)
 
   // Shorthand para actualizar el caché (persiste entre navegaciones)
   function patchData(patch: Partial<PageData>) {
@@ -325,6 +335,19 @@ export function EquiposPage() {
 
       <div className="space-y-6">
 
+        {/* BANNER inscripciones cerradas */}
+        {inscripcionesCerradas && (
+          <div className="bg-surface border border-border rounded-xl px-5 py-4 flex items-center gap-3">
+            <Lock size={16} className="text-muted shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-text">Inscripciones cerradas</p>
+              <p className="text-xs text-muted mt-0.5">
+                La fecha límite de inscripciones ha pasado. No se pueden realizar cambios en equipos ni jugadores.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* BANNER país */}
         {isLoading ? (
           <div className="h-24 rounded-2xl border border-border bg-surface animate-pulse" />
@@ -387,8 +410,9 @@ export function EquiposPage() {
                 const activo = deportesPend.includes(d.slug)
                 const icon = getDeporteIcon(d.slug)
                 return (
-                  <button key={d.slug} onClick={() => toggleDeporte(d.slug)}
-                    className={`relative flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all cursor-pointer group text-center ${activo ? 'border-primary bg-primary/1 shadow-[0_4px_12px_rgba(30,58,138,0.04)]'
+                  <button key={d.slug} onClick={() => !inscripcionesCerradas && toggleDeporte(d.slug)}
+                    disabled={inscripcionesCerradas}
+                    className={`relative flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all group text-center ${inscripcionesCerradas ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} ${activo ? 'border-primary bg-primary/1 shadow-[0_4px_12px_rgba(30,58,138,0.04)]'
                         : 'border-neutral-200/80 bg-white hover:border-neutral-300 hover:shadow-sm'
                       }`}
                   >
@@ -413,7 +437,7 @@ export function EquiposPage() {
           {/* La información de inscripción se integró directamente en el subtítulo superior para un diseño más limpio */}
 
           {/* Footer de guardar selección */}
-          {hasCambios && (
+          {hasCambios && !inscripcionesCerradas && (
             <div className="mt-6 pt-4 border-t border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-end gap-4 animate-[fadeIn_300ms_ease-out]">
               <div className="flex items-center gap-2 text-neutral-500">
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
@@ -537,12 +561,14 @@ export function EquiposPage() {
                                       </div>
                                     ) : (
                                       <div className="flex items-center gap-1">
-                                        <button onClick={() => iniciarEdicion(key, j)} title="Editar"
-                                          className="text-slate-400 hover:text-slate-900 hover:bg-slate-100 p-1.5 rounded-lg transition-all cursor-pointer">
+                                        <button onClick={() => !inscripcionesCerradas && iniciarEdicion(key, j)} title="Editar"
+                                          disabled={inscripcionesCerradas}
+                                          className="text-slate-400 hover:text-slate-900 hover:bg-slate-100 p-1.5 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                                           <Pencil size={14} />
                                         </button>
-                                        <button onClick={() => setConfirmDelete(j.id)} title="Eliminar"
-                                          className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-all cursor-pointer">
+                                        <button onClick={() => !inscripcionesCerradas && setConfirmDelete(j.id)} title="Eliminar"
+                                          disabled={inscripcionesCerradas}
+                                          className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                                           <Trash2 size={14} />
                                         </button>
                                       </div>
@@ -556,7 +582,7 @@ export function EquiposPage() {
                       ) : null}
 
                       {/* Formulario */}
-                      {showForm === key && (
+                      {showForm === key && !inscripcionesCerradas && (
                         <div className="border border-border rounded-lg p-4 bg-base mb-3">
                           <p className="text-xs font-bold text-muted uppercase tracking-wide mb-3">
                             {editingId ? 'Editar jugador' : 'Nuevo jugador'}
@@ -611,7 +637,7 @@ export function EquiposPage() {
                       )}
 
                       {/* Botón agregar */}
-                      {showForm !== key && (
+                      {showForm !== key && !inscripcionesCerradas && (
                         <button onClick={() => abrirFormNuevo(key)} disabled={!equipo.equipoId || jugadores.length >= maxJ}
                           className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-border rounded-lg text-sm text-muted hover:border-primary hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                           <UserPlus size={15} /> Agregar jugador

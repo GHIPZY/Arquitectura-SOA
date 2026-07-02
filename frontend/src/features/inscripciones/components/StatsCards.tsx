@@ -84,7 +84,7 @@ export function StatsCards({
               group-hover:opacity-100
               transition-opacity
               duration-300
-              bg-gradient-to-br
+              bg-linear-to-br
               from-secondary/5
               to-transparent
               pointer-events-none
@@ -162,7 +162,7 @@ export function StatsCards({
               left-0
               w-full
               h-1
-              bg-gradient-to-r
+              bg-linear-to-r
               from-secondary
               to-primary
               opacity-70
