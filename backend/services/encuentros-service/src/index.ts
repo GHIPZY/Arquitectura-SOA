@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import express, { Response } from 'express'
+import express, { Request, Response } from 'express'
 import cors from 'cors'
 import { requireAuth, AuthenticatedRequest, supabaseAdmin } from '@deportes/shared'
 
@@ -19,6 +19,23 @@ const SELECT_ENCUENTRO = `
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'encuentros-service' })
+})
+
+// GET /public/encuentros — lectura pública para espectadores (sin auth)
+app.get('/public/encuentros', async (req: Request, res: Response) => {
+  const { deporte_id, estado } = req.query as Record<string, string>
+
+  let query = supabaseAdmin
+    .from('encuentros')
+    .select(SELECT_ENCUENTRO)
+    .order('fecha_hora', { ascending: true })
+
+  if (deporte_id && deporte_id !== 'todos') query = query.eq('deporte_id', deporte_id)
+  if (estado      && estado      !== 'todos') query = query.eq('estado', estado)
+
+  const { data, error } = await query
+  if (error) return res.status(500).json({ error: error.message })
+  return res.json(data)
 })
 
 // GET /encuentros — lista con filtros opcionales
