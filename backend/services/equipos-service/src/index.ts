@@ -4,7 +4,7 @@ import cors from 'cors'
 import { requireAuth, AuthenticatedRequest, supabaseAdmin } from '@deportes/shared'
 
 const app = express()
-const PORT = process.env.PORT || 3002
+const PORT = process.env.PORT || 3006
 
 app.use(cors())
 app.use(express.json())

@@ -17,3 +17,9 @@ export async function getDeportes(): Promise<DeporteDB[]> {
   return res.json()
 }
 
+// Lectura pública (espectador sin login)
+export async function getDeportesPublic(): Promise<DeporteDB[]> {
+  const res = await fetch('/api/deportes/public/deportes')
+  if (!res.ok) throw new Error('Error al cargar deportes')
+  return res.json()
+}
