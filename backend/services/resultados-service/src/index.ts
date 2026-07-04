@@ -59,6 +59,21 @@ app.post('/resultados', requireAuth as any, async (req: AuthenticatedRequest, re
   return res.status(201).json(data)
 })
 
+// DELETE /resultados/:encuentro_id — elimina el resultado de un encuentro
+app.delete('/resultados/:encuentro_id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  if (!['administrador'].includes(req.user?.rol ?? '')) {
+    return res.status(403).json({ error: 'Sin permisos para eliminar resultados.' })
+  }
+
+  const { error } = await supabaseAdmin
+    .from('resultados')
+    .delete()
+    .eq('encuentro_id', req.params.encuentro_id)
+
+  if (error) return res.status(400).json({ error: error.message })
+  return res.json({ message: 'Resultado eliminado correctamente.' })
+})
+
 app.listen(PORT, () => {
   console.log(`[Resultados Service] corriendo en http://localhost:${PORT}`)
 })

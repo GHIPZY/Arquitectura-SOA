@@ -173,6 +173,7 @@ export function SorteoTorneoPage() {
     try {
       const r = await generarAtletismoSorteo()
       await refetchSorteo()
+      queryClient.invalidateQueries({ queryKey: ['atletismo-sorteo'] })
       setOmitidas(r.omitidas ?? [])
       if (r.pruebas > 0) {
         setSuccess(`Sorteo generado: ${r.total} atletas en ${r.pruebas} prueba${r.pruebas !== 1 ? 's' : ''}.`)
@@ -188,7 +189,10 @@ export function SorteoTorneoPage() {
     try {
       await eliminarAtletismoSorteo()
       await refetchSorteo()
-      setSuccess('Sorteo de carriles eliminado.')
+      queryClient.invalidateQueries({ queryKey: ['atletismo-sorteo'] })
+      queryClient.invalidateQueries({ queryKey: ['atletismo-resultados'] })
+      queryClient.invalidateQueries({ queryKey: ['atletismo-resultados-todos'] })
+      setSuccess('Sorteo de carriles y resultados eliminados.')
     } catch (e: unknown) { setError((e as Error).message) }
     finally { setEliminandoAtl(false) }
   }

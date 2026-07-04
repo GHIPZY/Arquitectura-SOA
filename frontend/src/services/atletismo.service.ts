@@ -79,6 +79,13 @@ export async function getAtletismoResultados(prueba?: string): Promise<Atletismo
   return res.json()
 }
 
+export async function deleteAtletismoResultado(id: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`/api/estadisticas/atletismo/resultados/${id}`, { method: 'DELETE', headers })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error ?? 'Error al eliminar resultado')
+}
+
 export async function saveAtletismoResultados(resultados: {
   prueba: string
   participante_id: string

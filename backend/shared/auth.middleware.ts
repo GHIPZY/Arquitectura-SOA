@@ -5,7 +5,7 @@ export interface AuthenticatedRequest extends Request {
   user?: {
     id: string
     email?: string
-    rol: 'administrador' | 'coordinador' | 'espectador' | 'arbitro'
+    rol: 'administrador' | 'coordinador' | 'espectador'
   }
   token?: string
 }
@@ -58,7 +58,7 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     req.user = {
       id: payload.sub,
       email: payload.email,
-      rol: dbUser.rol as 'administrador' | 'coordinador' | 'espectador' | 'arbitro'
+      rol: dbUser.rol as 'administrador' | 'coordinador' | 'espectador'
     }
     req.token = token
 

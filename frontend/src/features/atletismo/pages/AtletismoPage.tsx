@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { MainLayout } from '@/layouts/MainLayout'
-import { ChevronDown, Save, Trophy, Loader2 } from 'lucide-react'
+import { ChevronDown, Save, Trophy, Loader2, ArrowLeft, Trash2 } from 'lucide-react'
 import { BanderaPais } from '@/shared/components/BanderaPais'
 import { useCurrentUser } from '@/shared/context/UserContext'
 import {
   getAtletismoParticipantes,
   getAtletismoResultados,
+  getAtletismoSorteo,
   saveAtletismoResultados,
+  deleteAtletismoResultado,
 } from '@/services/atletismo.service'
 import { getAuthHeaders } from '@/services/auth.service'
 
@@ -36,12 +39,16 @@ export function AtletismoPage() {
   const { user } = useCurrentUser()
   const queryClient = useQueryClient()
   const isAdmin = user?.rol === 'administrador'
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
 
-  const [prueba, setPrueba] = useState('')
+  const [prueba, setPrueba] = useState(() => searchParams.get('prueba') ?? '')
   const [posiciones, setPosiciones] = useState<Record<string, number | ''>>({})
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null)
+  const [confirmarElimId, setConfirmarElimId] = useState<string | null>(null)
 
   const { data: gradosPaises = [] } = useQuery({
     queryKey: ['grados-paises'],
@@ -51,6 +58,14 @@ export function AtletismoPage() {
   const codigoMap: Record<string, string> = {}
   gradosPaises.forEach(gp => { codigoMap[gp.pais] = gp.codigo })
 
+  const { data: sorteo = [] } = useQuery({
+    queryKey: ['atletismo-sorteo', prueba],
+    queryFn: () => getAtletismoSorteo(prueba),
+    enabled: !!prueba,
+    staleTime: 5 * 60 * 1000,
+  })
+  const pruebaHabilitada = sorteo.length >= 2
+
   const { data: participantes = [], isLoading: loadingP } = useQuery({
     queryKey: ['atletismo-participantes', prueba],
     queryFn: () => getAtletismoParticipantes(prueba),
@@ -58,7 +73,7 @@ export function AtletismoPage() {
     staleTime: 5 * 60 * 1000,
   })
 
-  const { data: resultadosPrueba = [] } = useQuery({
+  const { data: resultadosPrueba } = useQuery({
     queryKey: ['atletismo-resultados', prueba],
     queryFn: () => getAtletismoResultados(prueba),
     enabled: !!prueba,
@@ -66,9 +81,30 @@ export function AtletismoPage() {
 
   useEffect(() => {
     const map: Record<string, number | ''> = {}
-    resultadosPrueba.forEach(r => { map[r.participante_id] = r.posicion_final })
+    resultadosPrueba?.forEach(r => { map[r.participante_id] = r.posicion_final })
     setPosiciones(map)
   }, [resultadosPrueba])
+
+  const resultadoIdMap: Record<string, string> = {}
+  resultadosPrueba?.forEach(r => { resultadoIdMap[r.participante_id] = r.id })
+
+  async function handleEliminarResultado(participanteId: string) {
+    const id = resultadoIdMap[participanteId]
+    if (!id) return
+    setConfirmarElimId(null)
+    setEliminandoId(id)
+    setError(null)
+    try {
+      await deleteAtletismoResultado(id)
+      setPosiciones(prev => ({ ...prev, [participanteId]: '' }))
+      queryClient.invalidateQueries({ queryKey: ['atletismo-resultados', prueba] })
+      queryClient.invalidateQueries({ queryKey: ['atletismo-resultados-todos'] })
+    } catch (e: unknown) {
+      setError((e as Error).message)
+    } finally {
+      setEliminandoId(null)
+    }
+  }
 
   // Resumen general: puntos por grado en todas las pruebas
   const { data: todosResultados = [] } = useQuery({
@@ -94,6 +130,13 @@ export function AtletismoPage() {
 
   async function handleGuardar() {
     if (!prueba) return
+
+    const faltantes = participantes.filter(p => posiciones[p.id] === '' || posiciones[p.id] === undefined)
+    if (faltantes.length > 0) {
+      setError(`Falta asignar posición a: ${faltantes.map(p => p.nombre_completo).join(', ')}.`)
+      return
+    }
+
 
     const asignadas = Object.entries(posiciones).filter(([, v]) => v !== '')
     const valores = asignadas.map(([, v]) => v as number)
@@ -130,8 +173,16 @@ export function AtletismoPage() {
       .map(([, v]) => v as number)
   )
 
+  const faltanPosiciones = participantes.some(p => posiciones[p.id] === '' || posiciones[p.id] === undefined)
+
   return (
     <MainLayout title="Atletismo" subtitle="Registro de posiciones y puntos por prueba">
+      <button
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-2 text-xs font-semibold text-muted hover:text-text transition-colors mb-4 cursor-pointer"
+      >
+        <ArrowLeft size={14} /> Volver
+      </button>
 
       {/* Resumen general */}
       {resumenOrdenado.length > 0 && (
@@ -182,6 +233,11 @@ export function AtletismoPage() {
 
           {loadingP ? (
             <div className="py-12 text-center text-sm text-muted">Cargando atletas...</div>
+          ) : !pruebaHabilitada ? (
+            <div className="py-12 text-center">
+              <p className="text-sm text-muted">Esta prueba fue omitida del sorteo por no tener mínimo 2 atletas inscritos.</p>
+              <p className="text-xs text-muted mt-1">No se pueden registrar resultados.</p>
+            </div>
           ) : participantes.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted">
               No hay atletas registrados para esta prueba.
@@ -191,7 +247,7 @@ export function AtletismoPage() {
               <table className="w-full">
                 <thead className="bg-base border-b border-border">
                   <tr>
-                    {['Atleta', 'Grado', 'País', 'Posición', 'Puntos'].map(h => (
+                    {['Atleta', 'Grado', 'País', 'Posición', 'Puntos', ''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted">{h}</th>
                     ))}
                   </tr>
@@ -242,6 +298,37 @@ export function AtletismoPage() {
                             <span className="text-sm text-muted">—</span>
                           )}
                         </td>
+                        <td className="px-4 py-3">
+                          {isAdmin && resultadoIdMap[p.id] && (
+                            confirmarElimId === p.id ? (
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <span className="text-[11px] font-semibold text-red-600">¿Eliminar?</span>
+                                <button
+                                  onClick={() => handleEliminarResultado(p.id)}
+                                  disabled={eliminandoId === resultadoIdMap[p.id]}
+                                  className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white rounded-md text-[11px] font-bold hover:bg-red-700 cursor-pointer disabled:opacity-60"
+                                >
+                                  {eliminandoId === resultadoIdMap[p.id] ? <Loader2 size={11} className="animate-spin" /> : null}
+                                  Sí
+                                </button>
+                                <button
+                                  onClick={() => setConfirmarElimId(null)}
+                                  className="px-2 py-1 border border-border text-muted rounded-md text-[11px] font-semibold cursor-pointer"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmarElimId(p.id)}
+                                className="text-muted hover:text-red-600 cursor-pointer transition-colors"
+                                title="Eliminar resultado"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )
+                          )}
+                        </td>
                       </tr>
                     )
                   })}
@@ -256,8 +343,9 @@ export function AtletismoPage() {
                   </div>
                   <button
                     onClick={handleGuardar}
-                    disabled={guardando}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60 cursor-pointer"
+                    disabled={guardando || faltanPosiciones}
+                    title={faltanPosiciones ? 'Asigna una posición a todos los atletas antes de guardar' : undefined}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {guardando ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Guardar posiciones

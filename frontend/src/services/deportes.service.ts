@@ -16,3 +16,4 @@ export async function getDeportes(): Promise<DeporteDB[]> {
   if (!res.ok) throw new Error('Error al cargar deportes')
   return res.json()
 }
+

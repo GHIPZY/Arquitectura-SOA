@@ -24,3 +24,10 @@ export async function upsertResultado(body: ResultadoDB): Promise<ResultadoDB> {
   if (!res.ok) throw new Error(json.error ?? 'Error al guardar resultado')
   return json
 }
+
+export async function deleteResultado(encuentro_id: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`/api/resultados/resultados/${encuentro_id}`, { method: 'DELETE', headers })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error ?? 'Error al eliminar resultado')
+}

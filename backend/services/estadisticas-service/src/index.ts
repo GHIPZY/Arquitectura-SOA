@@ -240,12 +240,16 @@ app.post('/atletismo/sorteo/generar', requireAuth as any, async (req: Authentica
   })
 })
 
-// ─── DELETE /atletismo/sorteo — eliminar sorteo ──────────────────────────────
+// ─── DELETE /atletismo/sorteo — eliminar sorteo y resultados asociados ──────
 app.delete('/atletismo/sorteo', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   if (req.user?.rol !== 'administrador') return res.status(403).json({ error: 'Sin permisos.' })
 
-  const { error } = await supabaseAdmin.from('atletismo_sorteo').delete().gte('carril', 1)
-  if (error) return res.status(400).json({ error: error.message })
+  const { error: errorSorteo } = await supabaseAdmin.from('atletismo_sorteo').delete().gte('carril', 1)
+  if (errorSorteo) return res.status(400).json({ error: errorSorteo.message })
+
+  const { error: errorResultados } = await supabaseAdmin.from('atletismo_resultados').delete().not('id', 'is', null)
+  if (errorResultados) return res.status(400).json({ error: errorResultados.message })
+
   return res.json({ ok: true })
 })
 
@@ -314,6 +318,21 @@ app.post('/atletismo/resultados', requireAuth as any, async (req: AuthenticatedR
 
   if (error) return res.status(400).json({ error: error.message })
   return res.status(201).json(data)
+})
+
+// ─── DELETE /atletismo/resultados/:id — eliminar resultado individual ──────
+app.delete('/atletismo/resultados/:id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.rol !== 'administrador') {
+    return res.status(403).json({ error: 'Solo el administrador puede eliminar resultados.' })
+  }
+
+  const { error } = await supabaseAdmin
+    .from('atletismo_resultados')
+    .delete()
+    .eq('id', req.params.id)
+
+  if (error) return res.status(400).json({ error: error.message })
+  return res.json({ message: 'Resultado eliminado correctamente.' })
 })
 
 // ─── DELETE /estadisticas/:id — eliminar estadística individual ────────────

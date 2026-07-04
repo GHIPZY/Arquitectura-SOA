@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { MainLayout } from '@/layouts/MainLayout'
 import {
   ClipboardList, ChevronDown, Loader2, Save, CheckCircle2,
-  AlertTriangle, Users, Trophy,
+  AlertTriangle, Users, Trophy, Trash2,
 } from 'lucide-react'
 import { useCurrentUser } from '@/shared/context/UserContext'
 import { getAuthHeaders } from '@/services/auth.service'
@@ -45,19 +46,14 @@ function FlagImg({ codigo, size = 'md' }: { codigo: string | null; size?: 'sm' |
 import { getEncuentros, type EncuentroDB } from '@/services/encuentros.service'
 import { getDeportes } from '@/services/deportes.service'
 import { getParticipantes, type ParticipanteDB } from '@/services/participantes.service'
-import { upsertResultado, getResultado } from '@/services/resultados.service'
+import { upsertResultado, getResultado, deleteResultado } from '@/services/resultados.service'
 import {
   getEstadisticasEncuentro,
   guardarEstadisticasBulk,
   updateEncuentro,
   type EstadisticaJugador,
 } from '@/services/admin.service'
-import {
-  getAtletismoParticipantes,
-  getAtletismoSorteo,
-  getAtletismoResultados,
-  saveAtletismoResultados,
-} from '@/services/atletismo.service'
+import { getAtletismoResultados } from '@/services/atletismo.service'
 
 // ─── Config por deporte ────────────────────────────────────────────────────
 
@@ -129,172 +125,6 @@ const PRUEBAS_ATLETISMO = [
   'Velocista 100m', 'Velocista 200m', 'Velocista 400m', 'Fondista',
   'Saltador de Altura', 'Saltador de Longitud', 'Lanzador', 'Marchista',
 ]
-const PUNTOS_ATL: Record<number, number> = { 1: 5, 2: 3, 3: 2, 4: 1 }
-function calcPuntosAtl(pos: number) { return PUNTOS_ATL[pos] ?? 0 }
-
-// ─── Panel atletismo ───────────────────────────────────────────────────────
-
-function PanelAtletismo({
-  prueba, isAdmin, onClose, codigoMap,
-}: {
-  prueba: string; isAdmin: boolean; onClose: () => void; codigoMap: Record<string, string>
-}) {
-  const queryClient = useQueryClient()
-  const [posiciones, setPosiciones] = useState<Record<string, number | ''>>({})
-  const [guardando, setGuardando]   = useState(false)
-  const [error, setError]           = useState<string | null>(null)
-  const [success, setSuccess]       = useState(false)
-
-  const { data: participantes = [] } = useQuery({
-    queryKey: ['atletismo-participantes', prueba],
-    queryFn: () => getAtletismoParticipantes(prueba),
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const { data: sorteo = [] } = useQuery({
-    queryKey: ['atletismo-sorteo', prueba],
-    queryFn: () => getAtletismoSorteo(prueba),
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const { data: resultadosPrueba = [] } = useQuery({
-    queryKey: ['atletismo-resultados', prueba],
-    queryFn: () => getAtletismoResultados(prueba),
-    staleTime: 0,
-  })
-
-  useEffect(() => {
-    const map: Record<string, number | ''> = {}
-    resultadosPrueba.forEach(r => { map[r.participante_id] = r.posicion_final })
-    setPosiciones(map)
-  }, [resultadosPrueba])
-
-  const carrilMap: Record<string, number> = {}
-  sorteo.forEach(s => { carrilMap[s.participante_id] = s.carril })
-
-  const posicionesOcupadas = new Set(
-    Object.entries(posiciones).filter(([, v]) => v !== '').map(([, v]) => v as number)
-  )
-
-  async function handleGuardar() {
-    const asignadas = Object.entries(posiciones).filter(([, v]) => v !== '')
-    const valores = asignadas.map(([, v]) => v as number)
-    if (new Set(valores).size !== valores.length) {
-      setError('Dos atletas no pueden tener la misma posición final.')
-      return
-    }
-    setGuardando(true); setError(null)
-    try {
-      await saveAtletismoResultados(asignadas.map(([pid, pos]) => ({
-        prueba, participante_id: pid,
-        posicion_final: pos as number,
-        puntos: calcPuntosAtl(pos as number),
-      })))
-      queryClient.invalidateQueries({ queryKey: ['atletismo-resultados'] })
-      queryClient.invalidateQueries({ queryKey: ['atletismo-resultados-todos'] })
-      setSuccess(true)
-    } catch (e: unknown) { setError((e as Error).message) }
-    finally { setGuardando(false) }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm pt-10 pb-6 px-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <div>
-            <p className="text-[10px] font-semibold text-muted uppercase tracking-wide">Atletismo</p>
-            <h2 className="text-lg font-extrabold text-text">{prueba}</h2>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-lg text-muted hover:bg-base transition-colors cursor-pointer">
-            ✕
-          </button>
-        </div>
-
-        {/* Tabla */}
-        <div className="p-6">
-          {participantes.length === 0 ? (
-            <p className="text-center text-sm text-muted py-8">No hay atletas registrados para esta prueba.</p>
-          ) : (
-            <table className="w-full">
-              <thead className="border-b border-border">
-                <tr>
-                  {['Carril', 'Atleta', 'Grado', 'Pos. Final', 'Puntos'].map(h => (
-                    <th key={h} className="text-left pb-2 text-xs font-semibold text-muted">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {participantes.map(p => {
-                  const pais   = p.equipos?.grados?.pais_asignado ?? null
-                  const codigo = pais ? (codigoMap[pais] ?? '') : ''
-                  const flag   = getFlag(codigo)
-                  const grado  = p.equipos?.grados?.nombre ?? '—'
-                  const carril = carrilMap[p.id] ?? null
-                  const pos    = posiciones[p.id] ?? ''
-                  const pts    = pos !== '' ? calcPuntosAtl(pos as number) : null
-
-                  return (
-                    <tr key={p.id} className="hover:bg-base/40 transition-colors">
-                      <td className="py-3 pr-3">
-                        {carril
-                          ? <span className="w-7 h-7 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">{carril}</span>
-                          : <span className="text-xs text-muted">—</span>}
-                      </td>
-                      <td className="py-3 text-sm font-semibold text-text pr-3">{p.nombre_completo}</td>
-                      <td className="py-3 pr-3">
-                        <div className="flex items-center gap-1.5">
-                          {flag && <img src={flag} alt={pais ?? ''} className="w-5 h-5 rounded object-cover border border-border" />}
-                          <span className="text-xs text-muted">{grado}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-3">
-                        {isAdmin ? (
-                          <select
-                            value={pos}
-                            onChange={e => { setPosiciones(prev => ({ ...prev, [p.id]: e.target.value === '' ? '' : parseInt(e.target.value) })); setSuccess(false) }}
-                            className="pl-2 pr-6 py-1 border border-border rounded-lg text-sm text-text bg-surface outline-none focus:border-primary"
-                          >
-                            <option value="">—</option>
-                            {Array.from({ length: participantes.length }, (_, i) => i + 1).map(n => (
-                              <option key={n} value={n} disabled={posicionesOcupadas.has(n) && posiciones[p.id] !== n}>{n}°</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-sm text-text">{pos !== '' ? `${pos}°` : '—'}</span>
-                        )}
-                      </td>
-                      <td className="py-3">
-                        {pts !== null
-                          ? <span className="text-sm font-bold text-primary">{pts} pts</span>
-                          : <span className="text-sm text-muted">—</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-
-          {isAdmin && participantes.length > 0 && (
-            <div className="mt-5 flex items-center justify-between">
-              <div>
-                {error   && <p className="text-xs text-red-500">{error}</p>}
-                {success && <p className="text-xs text-success">Guardado correctamente.</p>}
-              </div>
-              <button onClick={handleGuardar} disabled={guardando}
-                className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 transition-colors disabled:opacity-60 cursor-pointer">
-                {guardando ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                Guardar posiciones
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 
 type TabEquipo = 'local' | 'visitante'
@@ -356,6 +186,8 @@ function PanelEncuentro({
   const [success, setSuccess]     = useState(false)
   const [statsRows, setStatsRows] = useState<Record<string, StatRow>>({})
   const [estadoEncuentro, setEstadoEncuentro] = useState(encuentro.estado)
+  const [eliminandoResultado, setEliminandoResultado] = useState(false)
+  const [confirmarElimResultado, setConfirmarElimResultado] = useState(false)
 
   // initialData evita el flash de 0 al abrir; staleTime 0 refresca igual en background
   const { data: resultadoExistente } = useQuery({
@@ -537,6 +369,25 @@ function PanelEncuentro({
     }
   }
 
+  async function handleEliminarResultado() {
+    setConfirmarElimResultado(false)
+    setEliminandoResultado(true)
+    setError(null)
+    try {
+      await deleteResultado(encuentro.id)
+      setPuntosLocal('')
+      setPuntosVisitante('')
+      setSuccess(false)
+      queryClient.invalidateQueries({ queryKey: ['encuentros'] })
+      queryClient.invalidateQueries({ queryKey: ['resultado', encuentro.id] })
+      queryClient.invalidateQueries({ queryKey: ['clasificacion'] })
+    } catch (e: unknown) {
+      setError((e as Error).message)
+    } finally {
+      setEliminandoResultado(false)
+    }
+  }
+
   const paisL      = encuentro.equipo_local?.grados?.pais_asignado ?? null
   const paisV      = encuentro.equipo_visitante?.grados?.pais_asignado ?? null
   const codigoL   = paisL ? codigoMap[paisL] ?? null : null
@@ -604,11 +455,44 @@ function PanelEncuentro({
                   </span>
                 )}
                 {isPingPong && (
-                  <span className="text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full ml-auto">
+                  <span className="text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full">
                     Calculado automáticamente
                   </span>
                 )}
+                {resultadoExistente && !confirmarElimResultado && (
+                  <button
+                    onClick={() => setConfirmarElimResultado(true)}
+                    className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold text-red-600 hover:text-red-700 cursor-pointer"
+                  >
+                    <Trash2 size={12} />
+                    Eliminar resultado
+                  </button>
+                )}
               </div>
+
+              {confirmarElimResultado && (
+                <div className="border border-red-200 bg-red-50 rounded-xl p-4 mb-4 space-y-3">
+                  <p className="text-sm font-bold text-red-700 flex items-center gap-2">
+                    <AlertTriangle size={15} />¿Eliminar el resultado registrado de este partido?
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleEliminarResultado}
+                      disabled={eliminandoResultado}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 cursor-pointer disabled:opacity-60"
+                    >
+                      {eliminandoResultado ? <Loader2 size={13} className="animate-spin" /> : null}
+                      {eliminandoResultado ? 'Eliminando…' : 'Sí, eliminar'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmarElimResultado(false)}
+                      className="px-4 py-2 border border-red-200 text-red-600 rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {isPingPong ? (
                 <div className="flex items-center justify-center gap-10 py-2">
@@ -971,11 +855,11 @@ function PanelEncuentro({
 export function ResultadosPage() {
   const { user } = useCurrentUser()
   const isAdmin = user?.rol === 'administrador'
+  const navigate = useNavigate()
 
   const [deporteId, setDeporteId]         = useState('todos')
   const [estadoFiltro, setEstadoFiltro]   = useState('todos')
   const [encuentroSel, setEncuentroSel]   = useState<EncuentroDB | null>(null)
-  const [pruebaSel, setPruebaSel]         = useState<string | null>(null)
 
   const { data: gradosPaises = [] } = useQuery({
     queryKey: ['grados-paises'],
@@ -1002,6 +886,12 @@ export function ResultadosPage() {
     staleTime: 30_000,
   })
   const pruebasConResultado = new Set(atletismoResultados.map(r => r.prueba))
+  const pruebasFiltradas = PRUEBAS_ATLETISMO.filter(prueba => {
+    const tieneResultado = pruebasConResultado.has(prueba)
+    if (estadoFiltro === 'todos') return true
+    if (estadoFiltro === 'finalizado') return tieneResultado
+    return !tieneResultado
+  })
 
   const { data: encuentros = [], isLoading } = useQuery<EncuentroDB[]>({
     queryKey: ['encuentros', deporteId, estadoFiltro],
@@ -1017,16 +907,6 @@ export function ResultadosPage() {
       title="Resultados y Estadísticas"
       subtitle={isAdmin ? "Registra los resultados y estadísticas individuales de cada encuentro" : "Consulta los marcadores y estadísticas de cada encuentro"}
     >
-      {/* Panel atletismo */}
-      {pruebaSel && (
-        <PanelAtletismo
-          prueba={pruebaSel}
-          isAdmin={isAdmin}
-          onClose={() => setPruebaSel(null)}
-          codigoMap={codigoMap}
-        />
-      )}
-
       {/* Panel del encuentro seleccionado */}
       {encuentroSel && (
         <PanelEncuentro
@@ -1071,37 +951,50 @@ export function ResultadosPage() {
           </div>
 
           <div className="ml-auto text-xs text-muted">
-            {isLoading ? 'Cargando...' : `${encuentros.length} encuentro${encuentros.length !== 1 ? 's' : ''}`}
+            {esAtletismo
+              ? `${pruebasFiltradas.length} prueba${pruebasFiltradas.length !== 1 ? 's' : ''}`
+              : (isLoading ? 'Cargando...' : `${encuentros.length} encuentro${encuentros.length !== 1 ? 's' : ''}`)}
           </div>
         </div>
 
         {/* Vista atletismo */}
         {esAtletismo && (
-          <div className="bg-surface border border-border rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-border">
-              <p className="text-sm font-semibold text-text">Pruebas de atletismo</p>
-            </div>
-            <div className="divide-y divide-border">
-              {PRUEBAS_ATLETISMO.map(prueba => {
-                const tieneResultado = pruebasConResultado.has(prueba)
-                return (
-                  <div key={prueba} className="flex items-center justify-between px-5 py-3.5 hover:bg-base/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <p className="text-sm font-semibold text-text">{prueba}</p>
-                      {tieneResultado
-                        ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">Finalizado</span>
-                        : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">Pendiente</span>
-                      }
-                    </div>
-                    <button
-                      onClick={() => setPruebaSel(prueba)}
-                      className="px-4 py-1.5 text-xs font-bold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors cursor-pointer"
-                    >
-                      Gestionar
-                    </button>
-                  </div>
-                )
-              })}
+          <div className="space-y-4">
+            <div className="bg-surface border border-border rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-border">
+                <p className="text-sm font-semibold text-text">Pruebas de atletismo</p>
+              </div>
+              {pruebasFiltradas.length === 0 ? (
+                <div className="py-16 text-center">
+                  <ClipboardList size={32} className="mx-auto text-muted/30 mb-3" />
+                  <p className="text-sm text-muted">No hay pruebas con los filtros seleccionados.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {pruebasFiltradas.map(prueba => {
+                    const tieneResultado = pruebasConResultado.has(prueba)
+                    return (
+                      <div key={prueba}>
+                        <div className="flex items-center justify-between px-5 py-3.5 hover:bg-base/50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <p className="text-sm font-semibold text-text">{prueba}</p>
+                            {tieneResultado
+                              ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">Finalizado</span>
+                              : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">Pendiente</span>
+                            }
+                          </div>
+                          <button
+                            onClick={() => navigate(`/atletismo?prueba=${encodeURIComponent(prueba)}`)}
+                            className="px-4 py-1.5 text-xs font-bold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors cursor-pointer"
+                          >
+                            Gestionar
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
