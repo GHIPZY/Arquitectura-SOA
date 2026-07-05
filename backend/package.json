@@ -1,0 +1,9 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./services/*\" run dev",
+    "build": "pnpm --filter \"./services/*\" run build"
+  }
+}
