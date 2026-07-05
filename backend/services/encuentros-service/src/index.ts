@@ -251,6 +251,20 @@ app.put('/encuentros/:id', requireAuth as any, async (req: AuthenticatedRequest,
   const { id } = req.params
   const body = req.body as { estado?: string; fecha_hora?: string }
 
+  // Un encuentro finalizado (con resultado registrado) no admite cambios de fecha
+  if (body.fecha_hora) {
+    const { data: actual, error: errActual } = await supabaseAdmin
+      .from('encuentros')
+      .select('estado')
+      .eq('id', id)
+      .single()
+
+    if (errActual) return res.status(500).json({ error: errActual.message })
+    if (actual?.estado === 'finalizado') {
+      return res.status(409).json({ error: 'No se puede editar la fecha de un encuentro finalizado.' })
+    }
+  }
+
   const { data, error } = await supabaseAdmin
     .from('encuentros')
     .update(body)
@@ -284,6 +298,7 @@ app.get('/config', async (_req, res: Response) => {
     nombre_torneo: null,
     anio_torneo: null,
     limite_deportes_grado: null,
+    sets_pingpong: null,
   }
   data?.forEach(row => { cfg[row.clave] = row.valor })
   return res.json(cfg)

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
 import { ChevronDown, Pencil, Check, X, Loader2 } from 'lucide-react'
 import { BanderaPais } from '@/shared/components/BanderaPais'
+import { SkeletonRows } from '@/shared/components/Skeleton'
 import { getEncuentros, type EncuentroDB } from '@/services/encuentros.service'
 import { getDeportes } from '@/services/deportes.service'
 import { getAuthHeaders } from '@/services/auth.service'
@@ -96,6 +97,8 @@ export function EncuentrosPage() {
       deporte_id: deporteId !== 'todos' ? deporteId : undefined,
       estado:     estadoFiltro !== 'todos' ? estadoFiltro : undefined,
     }),
+    // el cron del backend actualiza estados cada 60s; refrescar al mismo ritmo
+    refetchInterval: 60_000,
   })
 
   const conteos = COUNTER_CFG.reduce((acc, { key }) => {
@@ -179,7 +182,7 @@ export function EncuentrosPage() {
       {/* Tabla */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         {isLoading ? (
-          <div className="py-16 text-center text-sm text-muted">Cargando encuentros...</div>
+          <SkeletonRows rows={6} avatar cols={4} />
         ) : encuentros.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted">No hay encuentros registrados.</div>
         ) : (
@@ -266,6 +269,10 @@ export function EncuentrosPage() {
                               <X size={13} />
                             </button>
                           </div>
+                        ) : e.estado === 'finalizado' ? (
+                          <span className="p-1.5 text-muted/30" title="No se puede editar la fecha de un encuentro finalizado">
+                            <Pencil size={13} />
+                          </span>
                         ) : (
                           <button onClick={() => iniciarEdicion(e)}
                             className="p-1.5 rounded-lg text-muted hover:text-text hover:bg-base transition-colors cursor-pointer">

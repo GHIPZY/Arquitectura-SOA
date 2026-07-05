@@ -18,6 +18,15 @@ export interface EncuentroStats {
   postergado: number
 }
 
+// Supabase devuelve `resultados` como objeto (relación 1-a-1) o array según el caso;
+// el resto del código espera siempre un array
+function normalizeEncuentros(data: any[]): EncuentroDB[] {
+  return data.map(e => ({
+    ...e,
+    resultados: e.resultados == null ? [] : Array.isArray(e.resultados) ? e.resultados : [e.resultados],
+  }))
+}
+
 export async function getEncuentros(params?: { deporte_id?: string; estado?: string }): Promise<EncuentroDB[]> {
   const headers = await getAuthHeaders()
   const qs = new URLSearchParams()
@@ -25,7 +34,7 @@ export async function getEncuentros(params?: { deporte_id?: string; estado?: str
   if (params?.estado)     qs.set('estado', params.estado)
   const res = await fetch(`/api/encuentros/encuentros?${qs}`, { headers })
   if (!res.ok) throw new Error('Error al cargar encuentros')
-  return res.json()
+  return normalizeEncuentros(await res.json())
 }
 
 // Lectura pública (espectador sin login)
@@ -35,14 +44,14 @@ export async function getEncuentrosPublic(params?: { deporte_id?: string; estado
   if (params?.estado)     qs.set('estado', params.estado)
   const res = await fetch(`/api/encuentros/public/encuentros?${qs}`)
   if (!res.ok) throw new Error('Error al cargar encuentros')
-  return res.json()
+  return normalizeEncuentros(await res.json())
 }
 
 export async function getEncuentrosHoy(): Promise<EncuentroDB[]> {
   const headers = await getAuthHeaders()
   const res = await fetch('/api/encuentros/encuentros/hoy', { headers })
   if (!res.ok) throw new Error('Error al cargar encuentros de hoy')
-  return res.json()
+  return normalizeEncuentros(await res.json())
 }
 
 export async function getEncuentrosStats(): Promise<EncuentroStats> {
