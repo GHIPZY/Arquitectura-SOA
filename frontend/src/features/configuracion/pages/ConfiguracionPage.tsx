@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
-import { Calendar, Trophy, Dumbbell, Save, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Calendar, Trophy, Dumbbell, Save, Loader2, CheckCircle2, AlertTriangle, Table2 } from 'lucide-react'
 import { getConfig, setConfig, type AppConfig } from '@/services/config.service'
+import { Skeleton } from '@/shared/components/Skeleton'
 import { getDeportes } from '@/services/deportes.service'
 import { getAuthHeaders } from '@/services/auth.service'
 
@@ -52,6 +53,9 @@ export function ConfiguracionPage() {
   const [savingInscr, setSavingInscr]             = useState(false)
   const [successInscr, setSuccessInscr]           = useState(false)
   const [errorInscr, setErrorInscr]               = useState<string | null>(null)
+  const [savingSets, setSavingSets]               = useState(false)
+  const [successSets, setSuccessSets]             = useState(false)
+  const [errorSets, setErrorSets]                 = useState<string | null>(null)
 
   // Deportes — límites editables
   type DeporteDraft = { max_participantes: number; min_participantes: number }
@@ -100,6 +104,22 @@ export function ConfiguracionPage() {
     setDraft(prev => ({ ...prev, [key]: value }))
     setSuccessTorneo(false)
     setSuccessInscr(false)
+    setSuccessSets(false)
+  }
+
+  async function handleGuardarSets() {
+    setSavingSets(true)
+    setErrorSets(null)
+    setSuccessSets(false)
+    try {
+      await setConfig(draft)
+      queryClient.invalidateQueries({ queryKey: ['config'] })
+      setSuccessSets(true)
+    } catch (e: unknown) {
+      setErrorSets((e as Error).message)
+    } finally {
+      setSavingSets(false)
+    }
   }
 
   async function handleGuardarTorneo() {
@@ -135,8 +155,28 @@ export function ConfiguracionPage() {
   if (isLoading) {
     return (
       <MainLayout title="Configuración" subtitle="Parámetros generales del torneo">
-        <div className="flex items-center justify-center gap-3 py-16 text-muted">
-          <Loader2 size={20} className="animate-spin" /> Cargando configuración...
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+          <div className="space-y-5 xl:col-span-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-6 border bg-surface border-border rounded-2xl space-y-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-9 h-9 rounded-xl" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-3.5 w-40" />
+                    <Skeleton className="h-2.5 w-56" />
+                  </div>
+                </div>
+                <Skeleton className="h-10 w-full max-w-md" />
+                <Skeleton className="h-9 w-28" />
+              </div>
+            ))}
+          </div>
+          <div className="p-5 border bg-surface border-border rounded-2xl h-fit space-y-3">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-2/3" />
+          </div>
         </div>
       </MainLayout>
     )
@@ -238,6 +278,40 @@ export function ConfiguracionPage() {
               </button>
               {errorInscr && <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle size={12} />{errorInscr}</p>}
               {successInscr && <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 size={12} />Guardado</p>}
+            </div>
+          </Seccion>
+
+          {/* Formato tenis de mesa */}
+          <Seccion
+            icon={<Table2 size={17} className="text-primary" />}
+            title="Formato de tenis de mesa"
+            description="Cantidad de sets por enfrentamiento individual (solo aplica a tenis de mesa)"
+          >
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-muted">Sets por partido</label>
+              <select
+                value={draft.sets_pingpong ?? '5'}
+                onChange={e => set('sets_pingpong', e.target.value === '5' ? null : e.target.value)}
+                className="px-3 py-2.5 text-sm border border-border rounded-xl bg-base text-text outline-none focus:border-primary transition-colors cursor-pointer"
+              >
+                <option value="3">Mejor de 3 — gana quien llega a 2 sets</option>
+                <option value="5">Mejor de 5 — gana quien llega a 3 sets (estándar)</option>
+              </select>
+              <p className="text-[11px] text-muted">
+                Afecta la validación al registrar resultados de tenis de mesa. Los resultados ya guardados no se modifican.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                onClick={handleGuardarSets}
+                disabled={savingSets}
+                className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {savingSets ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {savingSets ? 'Guardando...' : 'Guardar'}
+              </button>
+              {errorSets && <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle size={12} />{errorSets}</p>}
+              {successSets && <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 size={12} />Guardado</p>}
             </div>
           </Seccion>
 

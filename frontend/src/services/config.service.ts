@@ -5,6 +5,7 @@ export interface AppConfig {
   nombre_torneo:              string | null
   anio_torneo:                string | null
   limite_deportes_grado:      string | null
+  sets_pingpong:              string | null   // '3' o '5' (mejor de N sets); default 5
 }
 
 export async function getConfig(): Promise<AppConfig> {
@@ -14,6 +15,7 @@ export async function getConfig(): Promise<AppConfig> {
     nombre_torneo: null,
     anio_torneo: null,
     limite_deportes_grado: null,
+    sets_pingpong: null,
   }
   return res.json()
 }

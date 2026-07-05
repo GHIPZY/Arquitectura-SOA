@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { MainLayout } from '@/layouts/MainLayout'
 import {
   ClipboardList, ChevronDown, Loader2, Save, CheckCircle2,
@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import { useCurrentUser } from '@/shared/context/UserContext'
 import { getAuthHeaders } from '@/services/auth.service'
+import { Skeleton } from '@/shared/components/Skeleton'
+import { getConfig } from '@/services/config.service'
 
 // Imágenes .webp de banderas
 const PAIS_IMGS = import.meta.glob('/src/assets/paises/*.webp', {
@@ -251,6 +253,11 @@ function PanelEncuentro({
   const sportCfg  = DEPORTE_CONFIG[slug] ?? DEFAULT_CONFIG
   const isPingPong = sportCfg.pingpongMode ?? false
 
+  // Formato de tenis de mesa configurable por el admin: mejor de 3 o de 5 (default 5)
+  const { data: appConfig } = useQuery({ queryKey: ['config'], queryFn: getConfig, staleTime: 5 * 60 * 1000 })
+  const setsTotales = appConfig?.sets_pingpong === '3' ? 3 : 5
+  const setsGanar   = Math.ceil(setsTotales / 2)
+
   // Marcador auto-calculado para ping pong: gana quien tenga más sets en su enfrentamiento 1v1
   const ppScoreLocal = isPingPong
     ? jugadoresLocal.filter((j, i) => (statsRows[j.id]?.puntos ?? 0) > (statsRows[jugadoresVisitante[i]?.id]?.puntos ?? 0)).length
@@ -285,18 +292,18 @@ function PanelEncuentro({
     let pl: number, pv: number
 
     if (isPingPong) {
-      // Validar cada enfrentamiento 1v1: uno debe llegar a 3, el otro 0-2
+      // Validar cada enfrentamiento 1v1: uno debe llegar a setsGanar, el otro quedarse abajo
       for (let i = 0; i < jugadoresLocal.length; i++) {
         const jL = jugadoresLocal[i]
         const jV = jugadoresVisitante[i]
         if (!jL || !jV) continue
         const sL = statsRows[jL.id]?.puntos ?? 0
         const sV = statsRows[jV.id]?.puntos ?? 0
-        const valido = (sL === 3 && sV < 3) || (sV === 3 && sL < 3)
+        const valido = (sL === setsGanar && sV < setsGanar) || (sV === setsGanar && sL < setsGanar)
         if (!valido) {
           setError(
             `Partido ${i + 1} — ${jL.nombre_completo} vs ${jV.nombre_completo}: ` +
-            `resultado inválido (${sL}-${sV}). Uno debe ganar exactamente 3 sets, el otro entre 0 y 2.`
+            `resultado inválido (${sL}-${sV}). Uno debe ganar exactamente ${setsGanar} sets, el otro entre 0 y ${setsGanar - 1}.`
           )
           return
         }
@@ -551,15 +558,21 @@ function PanelEncuentro({
                   {isPingPong ? 'Enfrentamientos individuales' : 'Estadísticas por Jugador'}
                 </h3>
                 {isPingPong && (
-                  <span className="text-[10px] text-muted ml-1">— Mejor de 5 sets (llegar a 3)</span>
+                  <span className="text-[10px] text-muted ml-1">— Mejor de {setsTotales} sets (llegar a {setsGanar})</span>
                 )}
               </div>
 
               {isPingPong ? (
                 /* ── Tabla de enfrentamientos 1v1 (ping pong) ── */
                 loadingL || loadingV ? (
-                  <div className="flex items-center gap-3 py-8 justify-center text-muted">
-                    <Loader2 size={15} className="animate-spin" /> Cargando jugadores...
+                  <div className="space-y-2 py-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <Skeleton className="h-3.5 flex-1" />
+                        <Skeleton className="h-7 w-16 rounded-lg shrink-0" />
+                        <Skeleton className="h-3.5 flex-1" />
+                      </div>
+                    ))}
                   </div>
                 ) : jugadoresLocal.length === 0 ? (
                   <div className="py-8 text-center text-sm text-muted">No hay jugadores registrados.</div>
@@ -584,7 +597,7 @@ function PanelEncuentro({
                           const ganL = sL > sV
                           const ganV = sV > sL
                           const invalido = sL > 0 || sV > 0
-                            ? !((sL === 3 && sV < 3) || (sV === 3 && sL < 3))
+                            ? !((sL === setsGanar && sV < setsGanar) || (sV === setsGanar && sL < setsGanar))
                             : false
                           return (
                             <tr key={jL.id} className={`transition-colors ${invalido ? 'bg-red-50/50' : 'hover:bg-surface/60'}`}>
@@ -598,8 +611,8 @@ function PanelEncuentro({
                               </td>
                               <td className="px-3 py-3 text-center">
                                 <input
-                                  type="number" min="0" max="3" value={sL}
-                                  onChange={e => updateStat(jL.id, 'puntos', Math.min(3, parseInt(e.target.value) || 0))}
+                                  type="number" min="0" max={setsGanar} value={sL}
+                                  onChange={e => updateStat(jL.id, 'puntos', Math.min(setsGanar, parseInt(e.target.value) || 0))}
                                   onKeyDown={e => ['e','E','+','-','.'].includes(e.key) && e.preventDefault()}
                                   className={`w-14 text-center text-sm font-black border rounded-lg py-1.5 px-1 outline-none transition-colors bg-surface ${
                                     ganL ? 'border-success text-success' : invalido ? 'border-red-400 text-red-500' : 'border-border text-text focus:border-primary'
@@ -609,8 +622,8 @@ function PanelEncuentro({
                               <td className="px-3 py-3 text-center text-xs font-bold text-muted">vs</td>
                               <td className="px-3 py-3 text-center">
                                 <input
-                                  type="number" min="0" max="3" value={sV}
-                                  onChange={e => updateStat(jV.id, 'puntos', Math.min(3, parseInt(e.target.value) || 0))}
+                                  type="number" min="0" max={setsGanar} value={sV}
+                                  onChange={e => updateStat(jV.id, 'puntos', Math.min(setsGanar, parseInt(e.target.value) || 0))}
                                   onKeyDown={e => ['e','E','+','-','.'].includes(e.key) && e.preventDefault()}
                                   className={`w-14 text-center text-sm font-black border rounded-lg py-1.5 px-1 outline-none transition-colors bg-surface ${
                                     ganV ? 'border-success text-success' : invalido ? 'border-red-400 text-red-500' : 'border-border text-text focus:border-primary'
@@ -631,7 +644,7 @@ function PanelEncuentro({
                       </tbody>
                     </table>
                     <p className="text-[10px] text-muted text-center py-2 border-t border-border">
-                      Válido: 3-0 · 3-1 · 3-2 · 2-3 · 1-3 · 0-3 &nbsp;|&nbsp; Inválido: 3-3 · 2-2 · 4-1 · etc.
+                      Válido: el ganador llega a {setsGanar} sets (ej. {setsGanar}-0 · {setsGanar}-{setsGanar - 1}) &nbsp;|&nbsp; Inválido: empates o superar {setsGanar}
                     </p>
                   </div>
                 )
@@ -672,8 +685,14 @@ function PanelEncuentro({
                   </div>
 
                   {loading ? (
-                    <div className="flex items-center gap-3 py-8 justify-center text-muted">
-                      <Loader2 size={15} className="animate-spin" /> Cargando jugadores...
+                    <div className="space-y-2 py-4">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+                          <Skeleton className="h-3.5 w-40" />
+                          <Skeleton className="h-3.5 w-16 ml-auto" />
+                        </div>
+                      ))}
                     </div>
                   ) : jugadores.length === 0 ? (
                     <div className="py-8 text-center text-sm text-muted">No hay jugadores registrados en este equipo.</div>
@@ -902,6 +921,17 @@ export function ResultadosPage() {
     staleTime: 30_000,
   })
 
+  // Abrir directamente un encuentro si viene ?encuentro=<id> (ej. desde la vista pública)
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const id = searchParams.get('encuentro')
+    if (!id || encuentros.length === 0) return
+    const enc = encuentros.find(e => e.id === id)
+    if (enc) setEncuentroSel(enc)
+    searchParams.delete('encuentro')
+    setSearchParams(searchParams, { replace: true })
+  }, [encuentros])
+
   return (
     <MainLayout
       title="Resultados y Estadísticas"
@@ -1002,8 +1032,27 @@ export function ResultadosPage() {
         {/* Lista de encuentros */}
         {!esAtletismo && (<div className="bg-surface border border-border rounded-xl overflow-hidden">
           {isLoading ? (
-            <div className="flex items-center gap-3 py-16 justify-center text-muted">
-              <Loader2 size={20} className="animate-spin" /> Cargando encuentros...
+            <div className="divide-y divide-border">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3.5">
+                  <div className="w-16 space-y-1.5 shrink-0">
+                    <Skeleton className="h-3.5 w-10" />
+                    <Skeleton className="h-2.5 w-14" />
+                  </div>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Skeleton className="w-6 h-6 shrink-0" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                  <Skeleton className="h-4 w-10 shrink-0" />
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Skeleton className="w-6 h-6 shrink-0" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                  <Skeleton className="h-3 w-14 shrink-0" />
+                  <Skeleton className="h-6 w-20 rounded-full shrink-0" />
+                  <Skeleton className="h-7 w-20 rounded-lg shrink-0" />
+                </div>
+              ))}
             </div>
           ) : encuentros.length === 0 ? (
             <div className="py-16 text-center">
