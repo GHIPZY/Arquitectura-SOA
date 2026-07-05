@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
+import { Skeleton, SkeletonRows } from '@/shared/components/Skeleton'
 import {
   Loader2, Shuffle, RefreshCw, AlertTriangle, CheckCircle2,
   Calendar, ChevronDown, Users, Trash2,
@@ -402,8 +403,13 @@ export function SorteoTorneoPage() {
                     </p>
 
                     {loadingEq ? (
-                      <div className="flex items-center gap-2 py-4 text-muted text-sm">
-                        <Loader2 size={16} className="animate-spin" /> Cargando equipos…
+                      <div className="space-y-2 py-2">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            <Skeleton className="w-8 h-8 shrink-0" />
+                            <Skeleton className="h-3.5 w-40" />
+                          </div>
+                        ))}
                       </div>
                     ) : equipos.length === 0 ? (
                       <div className="text-center py-8 px-4 border border-dashed border-neutral-200 rounded-xl bg-neutral-50/50">
@@ -556,9 +562,7 @@ export function SorteoTorneoPage() {
                         <p className="text-xs font-semibold text-muted uppercase tracking-wide">Calendario generado</p>
                       </div>
                       {loadingEnc ? (
-                        <div className="flex items-center gap-2 py-4 text-muted text-sm">
-                          <Loader2 size={16} className="animate-spin" /> Cargando encuentros…
-                        </div>
+                        <SkeletonRows rows={4} cols={3} />
                       ) : (
                         <div className="border border-border rounded-lg overflow-hidden">
                           <table className="w-full">

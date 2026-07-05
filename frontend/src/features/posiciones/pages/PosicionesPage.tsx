@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
-import { Loader2, Trophy } from 'lucide-react'
+import { Trophy } from 'lucide-react'
+import { Skeleton } from '@/shared/components/Skeleton'
 import { getDeportes } from '@/services/deportes.service'
 import { getAuthHeaders } from '@/services/auth.service'
 import { useCurrentUser } from '@/shared/context/UserContext'
@@ -199,8 +200,21 @@ export function PosicionesPage() {
               </>
             )
           ) : isLoading ? (
-            <div className="flex items-center justify-center gap-3 py-16 text-muted">
-              <Loader2 size={20} className="animate-spin" /> Calculando posiciones...
+            <div className="divide-y divide-border">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3">
+                  <Skeleton className="w-4 h-4 shrink-0" />
+                  <Skeleton className="w-8 h-8 shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-28" />
+                    <Skeleton className="h-2.5 w-16" />
+                  </div>
+                  {Array.from({ length: 7 }).map((_, j) => (
+                    <Skeleton key={j} className="h-3.5 w-6 shrink-0" />
+                  ))}
+                  <Skeleton className="h-4 w-7 shrink-0" />
+                </div>
+              ))}
             </div>
           ) : !deporteId ? (
             <div className="py-16 text-center text-sm text-muted">Selecciona un deporte.</div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
+import { Skeleton } from '@/shared/components/Skeleton'
 import { Info, Pencil, Trash2, UserPlus, Users, ChevronDown, Dices, Loader2, Save, Lock } from 'lucide-react'
 import { BanderaPais } from '@/shared/components/BanderaPais'
 import { SorteoStage } from '@/shared/components/SorteoStage'
@@ -400,9 +401,10 @@ export function EquiposPage() {
           </div>
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-10 gap-3 text-muted">
-              <Loader2 size={20} className="animate-spin" />
-              <span className="text-sm">Cargando datos…</span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 rounded-xl" />
+              ))}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">

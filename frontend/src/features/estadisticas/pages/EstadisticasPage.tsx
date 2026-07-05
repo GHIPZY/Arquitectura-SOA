@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
-import { Loader2, Medal } from 'lucide-react'
+import { SkeletonRows } from '@/shared/components/Skeleton'
+import { Medal } from 'lucide-react'
 import { getDeportes } from '@/services/deportes.service'
 import { getAuthHeaders } from '@/services/auth.service'
 import { useCurrentUser } from '@/shared/context/UserContext'
@@ -186,9 +187,7 @@ export function EstadisticasPage() {
           )}
 
           {isLoading ? (
-            <div className="flex items-center justify-center gap-3 py-16 text-muted">
-              <Loader2 size={20} className="animate-spin" /> Cargando ranking...
-            </div>
+            <SkeletonRows rows={6} avatar cols={3} />
           ) : !deporteId ? (
             <div className="py-16 text-center text-sm text-muted">Selecciona un deporte.</div>
           ) : lista.length === 0 ? (

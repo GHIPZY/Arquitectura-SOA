@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
+import { SkeletonRows } from '@/shared/components/Skeleton'
 import {
   UserPlus, Trash2, Loader2, AlertTriangle, CheckCircle2,
   Eye, EyeOff, GraduationCap, ShieldCheck, Users,
@@ -240,9 +241,7 @@ export function UsuariosPage() {
         {/* Tabla de usuarios */}
         <div className="overflow-hidden border bg-surface border-border rounded-2xl">
           {isLoading ? (
-            <div className="flex items-center justify-center gap-3 py-16 text-muted">
-              <Loader2 size={20} className="animate-spin" /> Cargando usuarios...
-            </div>
+            <SkeletonRows rows={5} avatar cols={4} />
           ) : usuarios.length === 0 ? (
             <div className="py-16 text-center">
               <Users size={32} className="mx-auto mb-3 text-muted/30" />
