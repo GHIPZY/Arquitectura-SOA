@@ -7,6 +7,8 @@ import {
   marcarTodasLeidas,
   type NotificacionDB,
 } from '@/services/notificaciones.service'
+import { supabase } from '@/lib/supabase'
+import { useCurrentUser } from '@/shared/context/UserContext'
 
 const TIPO_ICON: Record<string, React.ReactNode> = {
   resultado:   <Trophy size={14} className="text-primary" />,
@@ -38,6 +40,32 @@ export function NotificacionesBell() {
   })
 
   const noLeidas = notificaciones.filter(n => !n.leida).length
+
+  // Tiempo real: Supabase Realtime avisa por WebSocket cuando el backend inserta
+  // una notificación. El evento es solo la señal ("algo llegó"); los datos se
+  // vuelven a pedir al microservicio — patrón "Realtime notifica, backend sirve".
+  const { user } = useCurrentUser()
+  useEffect(() => {
+    if (!user) return
+    const channel = supabase
+      .channel('notificaciones-live')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notificaciones' },
+        payload => {
+          const n = payload.new as { usuario_destino: string | null; rol_destino: string | null }
+          const esMia = n.usuario_destino === user.id || n.rol_destino === user.rol
+          if (!esMia) return
+          queryClient.invalidateQueries({ queryKey: ['notificaciones'] })
+          // Sacudir la campana para llamar la atención
+          setShaking(false)
+          requestAnimationFrame(() => setShaking(true))
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id])
 
   // Cerrar el dropdown al hacer clic fuera
   useEffect(() => {
