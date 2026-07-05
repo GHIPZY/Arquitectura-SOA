@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import loginBg from '@/assets/login/login-bg.webp'
 import logo from '@/assets/login/logo.webp'
@@ -9,6 +9,7 @@ const MAX_INTENTOS = 5
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -74,11 +75,17 @@ export function LoginPage() {
 
     await supabase.auth.setSession(data.session)
 
-    switch (data.rol) {
-      case 'administrador': navigate('/dashboard'); break
-      case 'coordinador': navigate('/equipos'); break
-      case 'espectador': navigate('/encuentros'); break
-      default: navigate('/dashboard')
+    // Si venía con destino (ej. "ver resultado" desde la vista pública), ir directo ahí
+    const next = searchParams.get('next')
+    if (next && next.startsWith('/')) {
+      navigate(next)
+    } else {
+      switch (data.rol) {
+        case 'administrador': navigate('/dashboard'); break
+        case 'coordinador': navigate('/equipos'); break
+        case 'espectador': navigate('/encuentros'); break
+        default: navigate('/dashboard')
+      }
     }
 
     setLoading(false)
@@ -210,6 +217,25 @@ export function LoginPage() {
             >
               {loading ? 'INGRESANDO...' : bloqueado ? 'BLOQUEADO' : 'INGRESAR AL CAMPO'}
             </button>
+
+            {/* Separador */}
+            <div className="flex items-center gap-3 pt-1">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-[11px] text-gray-400 uppercase tracking-wider">o</span>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+
+            {/* Acceso público sin login */}
+            <Link
+              to="/publico/encuentros"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-md border border-gray-300 text-sm font-bold text-gray-600 hover:border-red-600 hover:text-red-600 transition-colors uppercase tracking-wider"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Ver resultados en vivo
+            </Link>
           </form>
         </div>
 
