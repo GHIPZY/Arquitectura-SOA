@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Calendar } from 'lucide-react'
 import { getConfig } from '@/services/config.service'
+import { NotificacionesBell } from './NotificacionesBell'
 
 interface TopBarProps {
   title: string
@@ -31,6 +32,7 @@ export function TopBar({ title, subtitle, extra }: TopBarProps) {
         {subtitle && <p className="text-sm text-muted mt-0.5">{subtitle}</p>}
       </div>
       <div className="flex items-center gap-3 shrink-0">
+        <NotificacionesBell />
         {extra}
         {fechaLimite && (
           <div className="flex items-center gap-3">

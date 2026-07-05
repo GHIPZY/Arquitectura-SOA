@@ -46,6 +46,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/estadisticas/, ''),
       },
+      '/api/notificaciones': {
+        target: 'http://localhost:3011',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/notificaciones/, ''),
+      },
     },
   },
 })
