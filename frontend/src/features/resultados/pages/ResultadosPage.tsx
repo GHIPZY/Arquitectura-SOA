@@ -255,8 +255,20 @@ function PanelEncuentro({
 
   // Formato de tenis de mesa configurable por el admin: mejor de 3 o de 5 (default 5)
   const { data: appConfig } = useQuery({ queryKey: ['config'], queryFn: getConfig, staleTime: 5 * 60 * 1000 })
-  const setsTotales = appConfig?.sets_pingpong === '3' ? 3 : 5
-  const setsGanar   = Math.ceil(setsTotales / 2)
+  const setsGanarConfig = appConfig?.sets_pingpong === '3' ? 2 : 3
+
+  // Si el partido YA tiene resultado guardado, se respeta el formato con el que se
+  // jugó (cambiar la config después no debe invalidar resultados antiguos). El
+  // formato original se infiere de las stats: el ganador de cada 1v1 llegó
+  // exactamente al objetivo de sets vigente en ese momento.
+  const setsGanarGuardado = (() => {
+    if (!isPingPong || !resultadoExistente || !estadisticasData?.length) return null
+    const max = Math.max(...estadisticasData.map(s => s.puntos ?? 0))
+    return max >= 2 ? max : null
+  })()
+
+  const setsGanar   = setsGanarGuardado ?? setsGanarConfig
+  const setsTotales = setsGanar * 2 - 1
 
   // Marcador auto-calculado para ping pong: gana quien tenga más sets en su enfrentamiento 1v1
   const ppScoreLocal = isPingPong
@@ -558,7 +570,12 @@ function PanelEncuentro({
                   {isPingPong ? 'Enfrentamientos individuales' : 'Estadísticas por Jugador'}
                 </h3>
                 {isPingPong && (
-                  <span className="text-[10px] text-muted ml-1">— Mejor de {setsTotales} sets (llegar a {setsGanar})</span>
+                  <span className="text-[10px] text-muted ml-1">
+                    — Mejor de {setsTotales} sets (llegar a {setsGanar})
+                    {setsGanarGuardado !== null && setsGanarGuardado !== setsGanarConfig && (
+                      <span className="text-warning font-semibold"> · formato original del partido</span>
+                    )}
+                  </span>
                 )}
               </div>
 
@@ -673,10 +690,11 @@ function PanelEncuentro({
                             {pais ?? (isLocal ? 'Local' : 'Visitante')}
                           </span>
                           {sumaGoles !== null && marcador !== undefined && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border inline-flex items-center gap-1 ${
                               coherente ? 'bg-green-50 text-green-600 border-green-200' : 'bg-amber-50 text-amber-600 border-amber-200'
                             }`}>
-                              {sumaGoles}/{marcador} ⚽
+                              {sumaGoles}/{marcador}
+                              {coherente ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
                             </span>
                           )}
                         </button>
