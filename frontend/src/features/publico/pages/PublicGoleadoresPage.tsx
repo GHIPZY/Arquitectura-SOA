@@ -1,10 +1,17 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ChevronDown, Trophy, Lock } from 'lucide-react'
 import { PublicLayout } from '@/layouts/PublicLayout'
+import { SkeletonRows } from '@/shared/components/Skeleton'
 import { getGoleadores, type GoleadorDB } from '@/services/resultados.service'
 import { getDeportesPublic } from '@/services/deportes.service'
 import { useRealtimeMarcador } from '@/shared/hooks/useRealtimeMarcador'
+
+/** Celda numérica oculta: barra borrosa que insinúa el dato sin revelarlo */
+function CeldaOculta() {
+  return <div className="mx-auto h-3.5 w-7 rounded bg-slate-200 blur-[2px]" />
+}
 
 export function PublicGoleadoresPage() {
   const [deporteId, setDeporteId] = useState('todos')
@@ -45,30 +52,50 @@ export function PublicGoleadoresPage() {
       {/* Tabla */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         {isLoading ? (
-          <div className="py-16 text-center text-sm text-muted">Cargando ranking...</div>
+          <SkeletonRows rows={6} avatar cols={2} />
         ) : goleadores.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted">No hay anotadores registrados.</div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-base border-b border-border">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted w-10">#</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted">Jugador</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-muted">Asist.</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-muted">Puntos</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {goleadores.map((g, i) => (
-                <tr key={g.participante_id} className="hover:bg-base/50 transition-colors">
-                  <td className="px-4 py-3 text-sm font-bold text-muted">{i + 1}</td>
-                  <td className="px-4 py-3 text-sm font-bold text-text">{g.nombre_completo}</td>
-                  <td className="px-4 py-3 text-center text-sm text-text">{g.total_asistencias}</td>
-                  <td className="px-4 py-3 text-center text-sm font-bold text-primary">{g.total_puntos}</td>
+          <>
+            <table className="w-full">
+              <thead className="bg-base border-b border-border">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted w-10">#</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted">Jugador</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-muted">Asist.</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-muted">Puntos</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {goleadores.map((g, i) => {
+                  const medalCls = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-slate-400' : 'text-amber-600'
+                  return (
+                    <tr key={g.participante_id} className="hover:bg-base/50 transition-colors">
+                      <td className="px-4 py-3">
+                        {i < 3
+                          ? <Trophy size={15} className={medalCls} />
+                          : <span className="text-sm font-bold text-muted">{i + 1}</span>}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-text">{g.nombre_completo}</td>
+                      <td className="px-4 py-3 text-center"><CeldaOculta /></td>
+                      <td className="px-4 py-3 text-center"><CeldaOculta /></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            {/* Invitación a iniciar sesión */}
+            <div className="px-4 py-3 border-t border-border bg-base flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+              <p className="text-xs text-muted flex items-center gap-1.5">
+                <Lock size={12} />
+                Los puntos y asistencias son visibles al iniciar sesión
+              </p>
+              <Link to="/login" className="text-xs font-bold text-accent hover:underline">
+                Iniciar sesión →
+              </Link>
+            </div>
+          </>
         )}
       </div>
     </PublicLayout>

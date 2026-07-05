@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, ChevronRight, Lock, X, LogIn } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { PublicLayout } from '@/layouts/PublicLayout'
+import { SkeletonRows } from '@/shared/components/Skeleton'
 import { BanderaPais } from '@/shared/components/BanderaPais'
 import { getEncuentrosPublic, type EncuentroDB } from '@/services/encuentros.service'
 import { getDeportesPublic } from '@/services/deportes.service'
@@ -27,6 +29,7 @@ function formatFecha(iso: string) {
 
 export function PublicEncuentrosPage() {
   const [deporteId, setDeporteId] = useState('todos')
+  const [encuentroModal, setEncuentroModal] = useState<EncuentroDB | null>(null)
 
   const { data: deportes = [] } = useQuery({
     queryKey: ['deportes-public'],
@@ -62,28 +65,33 @@ export function PublicEncuentrosPage() {
       {/* Tabla */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         {isLoading ? (
-          <div className="py-16 text-center text-sm text-muted">Cargando encuentros...</div>
+          <SkeletonRows rows={6} avatar cols={3} />
         ) : encuentros.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted">No hay encuentros registrados.</div>
         ) : (
           <table className="w-full">
             <thead className="bg-base border-b border-border">
               <tr>
-                {['Fecha y Hora', 'Local', 'vs', 'Visitante', 'Deporte', 'Estado'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted">{h}</th>
+                {['Fecha y Hora', 'Local', 'vs', 'Visitante', 'Deporte', 'Estado', ''].map((h, i) => (
+                  <th key={i} className="text-left px-4 py-3 text-xs font-semibold text-muted">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {encuentros.map(e => {
                 const { dia, mes, hora } = formatFecha(e.fecha_hora)
-                const resultado = e.resultados?.[0] ?? null
                 const codigoL  = e.equipo_local?.grados?.pais_asignado ?? ''
                 const codigoV  = e.equipo_visitante?.grados?.pais_asignado ?? ''
                 const nombreL  = e.equipo_local?.nombre_equipo ?? '—'
                 const nombreV  = e.equipo_visitante?.nombre_equipo ?? '—'
+                const finalizado = e.estado === 'finalizado'
                 return (
-                  <tr key={e.id} className="hover:bg-base/50 transition-colors">
+                  <tr
+                    key={e.id}
+                    onClick={finalizado ? () => setEncuentroModal(e) : undefined}
+                    title={finalizado ? 'Ver resultado' : undefined}
+                    className={`transition-colors ${finalizado ? 'cursor-pointer hover:bg-base' : 'hover:bg-base/50'}`}
+                  >
                     <td className="px-4 py-3">
                       <p className="text-sm font-bold text-text">{dia}</p>
                       <p className="text-xs text-muted">{mes} · {hora}</p>
@@ -95,11 +103,7 @@ export function PublicEncuentrosPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {resultado ? (
-                        <span className="text-sm font-bold text-text">{resultado.puntos_local} - {resultado.puntos_visitante}</span>
-                      ) : (
-                        <span className="text-xs text-muted">vs</span>
-                      )}
+                      <span className="text-xs text-muted">vs</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -115,6 +119,9 @@ export function PublicEncuentrosPage() {
                         {ESTADO_CFG[e.estado].label}
                       </span>
                     </td>
+                    <td className="px-4 py-3 w-8">
+                      {finalizado && <ChevronRight size={16} className="text-muted" />}
+                    </td>
                   </tr>
                 )
               })}
@@ -122,6 +129,80 @@ export function PublicEncuentrosPage() {
           </table>
         )}
       </div>
+
+      {/* Modal: invita a iniciar sesión para ver el resultado */}
+      {encuentroModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setEncuentroModal(null)}
+        >
+          <div
+            className="bg-surface rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+            onClick={ev => ev.stopPropagation()}
+          >
+            {/* Encabezado con los equipos */}
+            <div className="bg-base px-6 py-5 border-b border-border relative">
+              <button
+                onClick={() => setEncuentroModal(null)}
+                className="absolute top-3 right-3 p-1.5 rounded-lg text-muted hover:bg-surface transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted text-center mb-3">
+                {encuentroModal.deportes?.nombre ?? 'Encuentro'}
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <div className="flex flex-col items-center gap-1.5 flex-1">
+                  {encuentroModal.equipo_local?.grados?.pais_asignado && (
+                    <BanderaPais codigo={encuentroModal.equipo_local.grados.pais_asignado} size="md" />
+                  )}
+                  <span className="text-[11px] font-bold text-text text-center leading-tight">
+                    {encuentroModal.equipo_local?.grados?.nombre ?? '—'}
+                  </span>
+                </div>
+                <span className="text-xs font-bold text-muted shrink-0">vs</span>
+                <div className="flex flex-col items-center gap-1.5 flex-1">
+                  {encuentroModal.equipo_visitante?.grados?.pais_asignado && (
+                    <BanderaPais codigo={encuentroModal.equipo_visitante.grados.pais_asignado} size="md" />
+                  )}
+                  <span className="text-[11px] font-bold text-text text-center leading-tight">
+                    {encuentroModal.equipo_visitante?.grados?.nombre ?? '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Cuerpo */}
+            <div className="px-6 py-6 text-center space-y-3">
+              <div className="mx-auto w-11 h-11 rounded-full bg-base border border-border flex items-center justify-center">
+                <Lock size={18} className="text-muted" />
+              </div>
+              <p className="text-sm font-bold text-text">Resultado disponible al iniciar sesión</p>
+              <p className="text-xs text-muted leading-relaxed">
+                Para ver el marcador y las estadísticas de este encuentro, ingresa con tu cuenta de espectador.
+                Si eres estudiante y aún no tienes una, pídesela al coordinador de tu grado.
+              </p>
+            </div>
+
+            {/* Acciones */}
+            <div className="px-6 pb-6 space-y-2">
+              <Link
+                to={`/login?next=${encodeURIComponent(`/resultados?encuentro=${encuentroModal.id}`)}`}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:bg-accent-hover transition-colors"
+              >
+                <LogIn size={15} />
+                Iniciar sesión
+              </Link>
+              <button
+                onClick={() => setEncuentroModal(null)}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-muted hover:bg-base transition-colors cursor-pointer"
+              >
+                Seguir viendo el calendario
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PublicLayout>
   )
 }

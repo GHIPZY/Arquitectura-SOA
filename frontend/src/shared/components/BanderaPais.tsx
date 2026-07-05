@@ -18,20 +18,46 @@ const CODE_TO_FILE: Record<string, string> = {
   pe: 'peru',
 }
 
+// Las vistas públicas reciben el nombre del país (pais_asignado), no el ISO-2
+const NAME_TO_CODE: Record<string, string> = {
+  brasil: 'br',
+  argentina: 'ar',
+  francia: 'fr',
+  alemania: 'de',
+  'españa': 'es',
+  espana: 'es',
+  italia: 'it',
+  portugal: 'pt',
+  uruguay: 'uy',
+  colombia: 'co',
+  chile: 'cl',
+  'perú': 'pe',
+  peru: 'pe',
+}
+
+function toCode(codigo: string): string | null {
+  const lower = codigo.toLowerCase().trim()
+  if (lower.length === 2) return lower
+  return NAME_TO_CODE[lower] ?? null
+}
+
 const FLAGS = import.meta.glob('/src/assets/icons/paises/*.png', {
   eager: true,
   import: 'default',
 }) as Record<string, string>
 
 function getSrc(codigo: string): string | null {
-  const name = CODE_TO_FILE[codigo.toLowerCase()]
+  const code = toCode(codigo)
+  const name = code ? CODE_TO_FILE[code] : undefined
   if (!name) return null
   const key = `/src/assets/icons/paises/${name}.png`
   return FLAGS[key] ?? null
 }
 
 function flagEmoji(codigo: string): string {
-  return codigo.toUpperCase().replace(/./g, c =>
+  const code = toCode(codigo)
+  if (!code) return '🏳️'
+  return code.toUpperCase().replace(/./g, c =>
     String.fromCodePoint(127397 + c.charCodeAt(0))
   )
 }
