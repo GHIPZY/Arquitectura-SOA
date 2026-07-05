@@ -6,6 +6,7 @@ export interface EquipoDB {
   deporte_id: string
   grado_id: string
   estado: string
+  descalificado?: boolean
   grados?: { id: string; nombre: string; pais_asignado: string | null; institucion_id: string | null }
   deportes?: { id: string; nombre: string; slug: string; categoria: string; max_participantes: number; min_participantes: number }
 }
@@ -41,6 +42,14 @@ export async function updateEquipo(id: string, body: Record<string, unknown>): P
   const res = await fetch(`/api/equipos/equipos/${id}`, { method: 'PUT', headers, body: JSON.stringify(body) })
   const json = await res.json()
   if (!res.ok) throw new Error(json.error ?? 'Error al actualizar equipo')
+  return json
+}
+
+export async function descalificarEquipo(id: string): Promise<{ ok: boolean; encuentros_afectados: number }> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`/api/equipos/equipos/${id}/descalificar`, { method: 'POST', headers })
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.error ?? 'Error al descalificar equipo')
   return json
 }
 

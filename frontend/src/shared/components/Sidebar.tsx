@@ -11,6 +11,7 @@ import equipoIcon from '@/assets/icons/slide/equipo.png'
 const NAV_ITEMS: { icon: React.ElementType | string; label: string; to: string; roles: Rol[] }[] = [
   { icon: inicioIcon,    label: 'Inicio',      to: '/dashboard',   roles: ['administrador', 'coordinador'] },
   { icon: equipoIcon,    label: 'Mis Equipos', to: '/equipos',     roles: ['coordinador'] },
+  { icon: equipoIcon,    label: 'Equipos',     to: '/equipos-admin', roles: ['administrador'] },
   { icon: Calendar,      label: 'Encuentros',  to: '/encuentros',  roles: ['administrador', 'coordinador', 'espectador'] },
   { icon: Trophy,        label: 'Sorteo',      to: '/sorteo',      roles: ['administrador'] },
   { icon: ClipboardList, label: 'Resultados',  to: '/resultados',  roles: ['administrador', 'coordinador', 'espectador'] },

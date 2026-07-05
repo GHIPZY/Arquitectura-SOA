@@ -172,13 +172,17 @@ export function DashboardPage() {
           <div className="bg-surface border border-border rounded-xl p-5">
             <p className="text-sm font-semibold text-text mb-3">Accesos rápidos</p>
             <div className="space-y-2">
-              <Link to="/equipos"
+              <Link to={user?.rol === 'administrador' ? '/equipos-admin' : '/equipos'}
                 className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors group">
                 <div className="flex items-center gap-3">
-                  <img src={equipoIcon} alt="Mis Equipos" className="w-5 h-5 object-contain" />
+                  <img src={equipoIcon} alt="Equipos" className="w-5 h-5 object-contain" />
                   <div>
-                    <p className="text-xs font-semibold text-text">Mis Equipos</p>
-                    <p className="text-[10px] text-muted">Registrar jugadores</p>
+                    <p className="text-xs font-semibold text-text">
+                      {user?.rol === 'administrador' ? 'Equipos inscritos' : 'Mis Equipos'}
+                    </p>
+                    <p className="text-[10px] text-muted">
+                      {user?.rol === 'administrador' ? 'Ver y gestionar equipos' : 'Registrar jugadores'}
+                    </p>
                   </div>
                 </div>
                 <ArrowRight size={13} className="text-muted group-hover:text-primary transition-colors" />

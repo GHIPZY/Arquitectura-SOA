@@ -205,6 +205,110 @@ async function notificarBaja(equipo: any, rolActor: string) {
   }
 }
 
+// POST /equipos/:id/descalificar — solo admin. Regla del torneo:
+//  1. El equipo queda marcado descalificado (no se borra: el historial lo necesita)
+//  2. Se anulan las estadísticas de sus jugadores
+//  3. Todos sus encuentros pasan a finalizado con walkover (1-0) para el rival
+//  4. Se notifica al coordinador del grado y a los espectadores
+app.post('/equipos/:id/descalificar', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.rol !== 'administrador') {
+    return res.status(403).json({ error: 'Solo el administrador puede descalificar equipos.' })
+  }
+
+  const { id } = req.params
+
+  const { data: equipo, error: errEquipo } = await supabaseAdmin
+    .from('equipos')
+    .select('id, nombre_equipo, grado_id, deporte_id, descalificado, deportes(nombre), grados(nombre, pais_asignado)')
+    .eq('id', id)
+    .single() as { data: any; error: any }
+
+  if (errEquipo || !equipo) return res.status(404).json({ error: 'Equipo no encontrado.' })
+  if (equipo.descalificado) return res.status(409).json({ error: 'El equipo ya está descalificado.' })
+
+  // 1. Marcar descalificado
+  const { error: errMark } = await supabaseAdmin
+    .from('equipos')
+    .update({ descalificado: true })
+    .eq('id', id)
+  if (errMark) return res.status(500).json({ error: errMark.message })
+
+  // 2. Anular estadísticas de sus jugadores
+  const { data: participantes } = await supabaseAdmin
+    .from('participantes')
+    .select('id')
+    .eq('equipo_id', id)
+
+  const participanteIds = (participantes ?? []).map(p => p.id)
+  if (participanteIds.length > 0) {
+    await supabaseAdmin.from('estadisticas_jugador').delete().in('participante_id', participanteIds)
+    // Atletismo: sus resultados por prueba y carriles sorteados también se anulan
+    await supabaseAdmin.from('atletismo_resultados').delete().in('participante_id', participanteIds)
+    await supabaseAdmin.from('atletismo_sorteo').delete().in('participante_id', participanteIds)
+  }
+
+  // 3. Walkover: todos sus encuentros quedan finalizados con victoria 1-0 del rival
+  const { data: encuentros } = await supabaseAdmin
+    .from('encuentros')
+    .select('id, equipo_local_id, equipo_visitante_id')
+    .or(`equipo_local_id.eq.${id},equipo_visitante_id.eq.${id}`)
+
+  for (const enc of encuentros ?? []) {
+    const esLocal = enc.equipo_local_id === id
+    await supabaseAdmin.from('resultados').upsert(
+      {
+        encuentro_id: enc.id,
+        puntos_local: esLocal ? 0 : 1,
+        puntos_visitante: esLocal ? 1 : 0,
+        registrado_por: req.user!.id,
+      },
+      { onConflict: 'encuentro_id' }
+    )
+    await supabaseAdmin.from('encuentros').update({ estado: 'finalizado' }).eq('id', enc.id)
+  }
+
+  // 4. Notificar (en segundo plano)
+  notificarDescalificacion(equipo).catch(err =>
+    console.error('[notificaciones] Error al notificar descalificación:', err))
+
+  return res.json({
+    ok: true,
+    encuentros_afectados: encuentros?.length ?? 0,
+    estadisticas_anuladas: participanteIds.length,
+  })
+})
+
+async function notificarDescalificacion(equipo: any) {
+  const detalle = [equipo.deportes?.nombre, equipo.grados?.nombre, equipo.grados?.pais_asignado]
+    .filter(Boolean).join(' — ')
+
+  const notificaciones: any[] = [{
+    rol_destino: 'espectador',
+    tipo: 'inscripcion',
+    titulo: `Equipo descalificado de ${equipo.deportes?.nombre ?? 'el torneo'}`,
+    mensaje: `${equipo.nombre_equipo}${detalle ? ` (${detalle})` : ''}. Sus encuentros se resuelven por walkover.`,
+  }]
+
+  if (equipo.grado_id) {
+    const { data: coordinadores } = await supabaseAdmin
+      .from('usuarios')
+      .select('id')
+      .eq('rol', 'coordinador')
+      .eq('grado_id', equipo.grado_id)
+
+    for (const c of coordinadores ?? []) {
+      notificaciones.push({
+        usuario_destino: c.id,
+        tipo: 'inscripcion',
+        titulo: 'Tu equipo fue descalificado',
+        mensaje: `${equipo.nombre_equipo}${detalle ? ` (${detalle})` : ''} fue descalificado del torneo. Sus encuentros se resuelven a favor de los rivales.`,
+      })
+    }
+  }
+
+  await supabaseAdmin.from('notificaciones').insert(notificaciones)
+}
+
 app.listen(PORT, () => {
   console.log(`[Equipos Service] corriendo en http://localhost:${PORT}`)
 })

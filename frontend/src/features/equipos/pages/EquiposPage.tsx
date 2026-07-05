@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
 import { Skeleton } from '@/shared/components/Skeleton'
-import { Info, Pencil, Trash2, UserPlus, Users, ChevronDown, Dices, Loader2, Save, Lock } from 'lucide-react'
+import { Info, Pencil, Trash2, UserPlus, Users, ChevronDown, Dices, Loader2, Save, Lock, ShieldX } from 'lucide-react'
 import { BanderaPais } from '@/shared/components/BanderaPais'
 import { SorteoStage } from '@/shared/components/SorteoStage'
 import { DadosAnimation } from '@/shared/components/DadosAnimation'
@@ -45,7 +45,7 @@ function getDeporteIcon(key: string): string | undefined {
 // ─────────────────────────────────────────────
 
 type Jugador = { id: string; nombre: string; dni: string; posicion: string }
-type EquipoLocal = { deporteKey: string; equipoId: string | null; jugadores: Jugador[] }
+type EquipoLocal = { deporteKey: string; equipoId: string | null; jugadores: Jugador[]; descalificado?: boolean }
 
 type PageData = {
   paisAsignado: { pais: string; codigo: string } | null
@@ -89,7 +89,7 @@ async function fetchPageData(user: CurrentUser): Promise<PageData> {
         posicion: p.posicion ?? '',
       }))
 
-      return { deporteKey: slug, equipoId: eq.id, jugadores }
+      return { deporteKey: slug, equipoId: eq.id, jugadores, descalificado: eq.descalificado ?? false }
     })
   ).then(r => r.filter((e) => e !== null) as EquipoLocal[])
 
@@ -471,13 +471,14 @@ export function EquiposPage() {
               const maxJ = deporte?.max_participantes ?? 99
               const valido = jugadores.length >= minJ && jugadores.length <= maxJ
               const posicionesDeporte = POSICIONES_POR_DEPORTE[key] ?? []
+              const descalificado = equipo.descalificado ?? false
 
               return (
-                <div key={key} className="bg-surface rounded-xl border border-border overflow-hidden">
+                <div key={key} className={`bg-surface rounded-xl border overflow-hidden ${descalificado ? 'border-red-200 opacity-80' : 'border-border'}`}>
 
                   {/* Cabecera */}
-                  <button onClick={() => setExpandido(abierto ? null : key)}
-                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-base/50 transition-colors cursor-pointer">
+                  <button onClick={() => !descalificado && setExpandido(abierto ? null : key)}
+                    className={`w-full flex items-center justify-between px-5 py-4 transition-colors ${descalificado ? 'cursor-default' : 'hover:bg-base/50 cursor-pointer'}`}>
                     <div className="flex items-center gap-4">
                       {paisAsignado
                         ? <BanderaPais codigo={paisAsignado.codigo} size="md" className="rounded border border-neutral-200/60 bg-white p-0.5" />
@@ -498,10 +499,17 @@ export function EquiposPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
+                      {descalificado ? (
+                        <div className="flex items-center gap-1.5">
+                          <ShieldX size={14} className="text-red-600" />
+                          <span className="text-xs font-bold text-red-600">Descalificado del torneo</span>
+                        </div>
+                      ) : (
                       <div className="flex items-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${valido ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`} />
                         <span className="text-xs font-bold text-slate-600">{valido ? 'Listo' : 'En formación'}</span>
                       </div>
+                      )}
                       <ChevronDown size={16} className={`text-muted transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
                     </div>
                   </button>

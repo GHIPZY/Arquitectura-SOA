@@ -197,9 +197,10 @@ app.post('/atletismo/sorteo/generar', requireAuth as any, async (req: Authentica
 
   const { data: participantes, error } = await supabaseAdmin
     .from('participantes')
-    .select('id, posicion, equipos!inner(deportes!inner(slug))')
+    .select('id, posicion, equipos!inner(descalificado, deportes!inner(slug))')
     .eq('activo', true)
     .eq('equipos.deportes.slug', 'atletismo')
+    .eq('equipos.descalificado', false)
     .not('posicion', 'is', null)
 
   if (error) return res.status(500).json({ error: error.message })
@@ -271,6 +272,7 @@ app.get('/atletismo/participantes', requireAuth as any, async (req: Authenticate
     .eq('posicion', prueba)
     .eq('activo', true)
     .eq('equipos.deportes.slug', 'atletismo')
+    .eq('equipos.descalificado', false)
 
   if (error) return res.status(500).json({ error: error.message })
   return res.json(data ?? [])

@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { LoginPage }         from './features/auth/pages/LoginPage'
 import { DashboardPage }     from './features/dashboard/pages/DashboardPage'
 import { EquiposPage }       from './features/equipos/pages/EquiposPage'
+import { EquiposAdminPage }  from './features/equipos/pages/EquiposAdminPage'
 import { EncuentrosPage }    from './features/encuentros/pages/EncuentrosPage'
 import { SorteoTorneoPage }  from './features/sorteo/pages/SorteoTorneoPage'
 import { ResultadosPage }    from './features/resultados/pages/ResultadosPage'
@@ -43,6 +44,7 @@ function App() {
       <Route path="/admin"         element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard"     element={<AuthGuard><DashboardPage /></AuthGuard>} />
       <Route path="/equipos"       element={<AuthGuard><RolGuard roles={['coordinador']}><EquiposPage /></RolGuard></AuthGuard>} />
+      <Route path="/equipos-admin" element={<AuthGuard><RolGuard roles={['administrador']}><EquiposAdminPage /></RolGuard></AuthGuard>} />
       <Route path="/encuentros"    element={<AuthGuard><EncuentrosPage /></AuthGuard>} />
       <Route path="/inscripciones" element={<Navigate to="/equipos" replace />} />
       <Route path="/sorteo"        element={<AuthGuard><RolGuard roles={['administrador']}><SorteoTorneoPage /></RolGuard></AuthGuard>} />

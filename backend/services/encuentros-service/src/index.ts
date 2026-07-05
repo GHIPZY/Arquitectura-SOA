@@ -103,7 +103,7 @@ app.get('/encuentros/clasificacion', requireAuth as any, async (req: Authenticat
   if (!deporte_id) return res.status(400).json({ error: 'deporte_id requerido' })
 
   const [{ data: equipos }, { data: encuentros }, { data: resultados }] = await Promise.all([
-    supabaseAdmin.from('equipos').select('id, nombre_equipo, grados(nombre, pais_asignado)').eq('deporte_id', deporte_id),
+    supabaseAdmin.from('equipos').select('id, nombre_equipo, grados(nombre, pais_asignado)').eq('deporte_id', deporte_id).eq('descalificado', false),
     supabaseAdmin.from('encuentros').select('id, equipo_local_id, equipo_visitante_id').eq('deporte_id', deporte_id),
     supabaseAdmin.from('resultados').select('encuentro_id, puntos_local, puntos_visitante'),
   ])
@@ -165,6 +165,7 @@ app.post('/encuentros/generar-torneo', requireAuth as any, async (req: Authentic
     .from('equipos')
     .select('id')
     .eq('deporte_id', deporte_id)
+    .eq('descalificado', false)
 
   if (errEq) return res.status(500).json({ error: errEq.message })
   if (!equipos || equipos.length < 2) return res.status(400).json({ error: 'Se necesitan al menos 2 equipos para generar el torneo.' })
@@ -217,7 +218,7 @@ app.post('/encuentros/regenerar-torneo', requireAuth as any, async (req: Authent
 
   if (errDel) return res.status(500).json({ error: errDel.message })
 
-  const { data: equipos } = await supabaseAdmin.from('equipos').select('id').eq('deporte_id', deporte_id)
+  const { data: equipos } = await supabaseAdmin.from('equipos').select('id').eq('deporte_id', deporte_id).eq('descalificado', false)
   if (!equipos || equipos.length < 2) return res.status(400).json({ error: 'Se necesitan al menos 2 equipos.' })
 
   const fechaBase2 = new Date()
@@ -426,7 +427,7 @@ async function autoSorteo() {
 
     for (const deporte of deportes) {
       const { data: equipos } = await supabaseAdmin
-        .from('equipos').select('id').eq('deporte_id', deporte.id)
+        .from('equipos').select('id').eq('deporte_id', deporte.id).eq('descalificado', false)
 
       if (!equipos || equipos.length < 2) continue
 
