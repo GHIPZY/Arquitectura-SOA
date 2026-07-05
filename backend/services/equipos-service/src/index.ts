@@ -76,8 +76,46 @@ app.post('/equipos', requireAuth as any, async (req: AuthenticatedRequest, res: 
     .single()
 
   if (error) return res.status(400).json({ error: error.message })
+
+  // Notificar en segundo plano: al admin (broadcast) y al coordinador que inscribió
+  notificarInscripcion(data, req.user!.id)
+    .catch(err => console.error('[notificaciones] Error al notificar inscripción:', err))
+
   return res.status(201).json(data)
 })
+
+// ── Notificaciones: aviso de nueva inscripción de equipo ──
+async function notificarInscripcion(equipo: any, coordinadorId: string) {
+  const [{ data: deporte }, { data: grado }] = await Promise.all([
+    equipo.deporte_id
+      ? supabaseAdmin.from('deportes').select('nombre').eq('id', equipo.deporte_id).single()
+      : Promise.resolve({ data: null }),
+    equipo.grado_id
+      ? supabaseAdmin.from('grados').select('nombre, pais_asignado').eq('id', equipo.grado_id).single()
+      : Promise.resolve({ data: null }),
+  ])
+
+  const g = grado as { nombre?: string; pais_asignado?: string | null } | null
+  const gradoConPais = g?.nombre
+    ? `${g.nombre}${g.pais_asignado ? ` · ${g.pais_asignado}` : ''}`
+    : null
+  const detalle = [deporte?.nombre, gradoConPais].filter(Boolean).join(' — ') || equipo.nombre_equipo
+
+  await supabaseAdmin.from('notificaciones').insert([
+    {
+      rol_destino: 'administrador',
+      tipo: 'inscripcion',
+      titulo: 'Nueva inscripción de equipo',
+      mensaje: `${equipo.nombre_equipo} (${detalle})`,
+    },
+    {
+      usuario_destino: coordinadorId,
+      tipo: 'inscripcion',
+      titulo: 'Equipo inscrito correctamente',
+      mensaje: `${equipo.nombre_equipo} quedó registrado en ${deporte?.nombre ?? 'el torneo'}${g?.pais_asignado ? ` representando a ${g.pais_asignado}` : ''}.`,
+    },
+  ])
+}
 
 // PUT /equipos/:id — actualizar equipo
 app.put('/equipos/:id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
@@ -106,10 +144,66 @@ app.delete('/equipos/:id', requireAuth as any, async (req: AuthenticatedRequest,
     return res.status(403).json({ error: 'El período de inscripciones ha cerrado. Ya no es posible eliminar equipos.' })
   }
 
+  // Capturar los datos del equipo ANTES de borrarlo (para poder notificar después)
+  const { data: equipo } = await supabaseAdmin
+    .from('equipos')
+    .select('id, nombre_equipo, grado_id, deporte_id')
+    .eq('id', req.params.id)
+    .single()
+
   const { error } = await supabaseAdmin.from('equipos').delete().eq('id', req.params.id)
   if (error) return res.status(400).json({ error: error.message })
+
+  if (equipo) {
+    notificarBaja(equipo, req.user!.rol ?? '')
+      .catch(err => console.error('[notificaciones] Error al notificar baja:', err))
+  }
+
   return res.json({ message: 'Equipo eliminado correctamente.' })
 })
+
+// ── Notificaciones: aviso de baja de equipo (al lado que NO ejecutó la acción) ──
+async function notificarBaja(equipo: any, rolActor: string) {
+  const [{ data: deporte }, { data: grado }] = await Promise.all([
+    equipo.deporte_id
+      ? supabaseAdmin.from('deportes').select('nombre').eq('id', equipo.deporte_id).single()
+      : Promise.resolve({ data: null }),
+    equipo.grado_id
+      ? supabaseAdmin.from('grados').select('nombre, pais_asignado').eq('id', equipo.grado_id).single()
+      : Promise.resolve({ data: null }),
+  ])
+
+  const g = grado as { nombre?: string; pais_asignado?: string | null } | null
+  const detalle = [deporte?.nombre, g?.nombre, g?.pais_asignado].filter(Boolean).join(' — ') || ''
+
+  if (rolActor === 'administrador') {
+    // El admin dio de baja → avisar a los coordinadores del grado del equipo
+    if (!equipo.grado_id) return
+    const { data: coordinadores } = await supabaseAdmin
+      .from('usuarios')
+      .select('id')
+      .eq('rol', 'coordinador')
+      .eq('grado_id', equipo.grado_id)
+
+    if (!coordinadores?.length) return
+    await supabaseAdmin.from('notificaciones').insert(
+      coordinadores.map(c => ({
+        usuario_destino: c.id,
+        tipo: 'inscripcion',
+        titulo: 'Tu equipo fue dado de baja',
+        mensaje: `${equipo.nombre_equipo}${detalle ? ` (${detalle})` : ''} fue retirado del torneo por el administrador.`,
+      }))
+    )
+  } else {
+    // El coordinador se desinscribió → avisar al admin
+    await supabaseAdmin.from('notificaciones').insert({
+      rol_destino: 'administrador',
+      tipo: 'inscripcion',
+      titulo: 'Baja de equipo',
+      mensaje: `${equipo.nombre_equipo}${detalle ? ` (${detalle})` : ''} se retiró del torneo.`,
+    })
+  }
+}
 
 app.listen(PORT, () => {
   console.log(`[Equipos Service] corriendo en http://localhost:${PORT}`)
