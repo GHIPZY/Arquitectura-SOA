@@ -31,6 +31,31 @@
   --color-danger:  #EF4444;
 
   --font-family-body: "Inter", sans-serif;
+
+  /* Animaciones */
+  /* Panel de notificaciones: nace desde la flecha con rebote elástico */
+  --animate-dropdown-in: dropdown-in 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+  @keyframes dropdown-in {
+    from { opacity: 0; transform: scale(0.85) translateY(-10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* Contenido interno del panel: entrada secuencial de arriba a abajo */
+  --animate-stagger-in: stagger-in 0.3s ease-out both;
+  @keyframes stagger-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Vibración de la campana al hacer clic */
+  --animate-bell-shake: bell-shake 0.45s ease-in-out;
+  @keyframes bell-shake {
+    0%, 100% { transform: rotate(0deg); }
+    20%      { transform: rotate(14deg); }
+    40%      { transform: rotate(-11deg); }
+    60%      { transform: rotate(7deg); }
+    80%      { transform: rotate(-4deg); }
+  }
 }
 
 * { box-sizing: border-box; }
