@@ -270,6 +270,15 @@ function PanelEncuentro({
   const setsGanar   = setsGanarGuardado ?? setsGanarConfig
   const setsTotales = setsGanar * 2 - 1
 
+  // Walkover por descalificación: si uno de los equipos está descalificado, el
+  // resultado es administrativo — no hay estadísticas ni edición posible
+  const equipoDescalificado = encuentro.equipo_local?.descalificado
+    ? encuentro.equipo_local
+    : encuentro.equipo_visitante?.descalificado
+      ? encuentro.equipo_visitante
+      : null
+  const esWalkover = !!equipoDescalificado && !!resultadoExistente
+
   // Marcador auto-calculado para ping pong: gana quien tenga más sets en su enfrentamiento 1v1
   const ppScoreLocal = isPingPong
     ? jugadoresLocal.filter((j, i) => (statsRows[j.id]?.puntos ?? 0) > (statsRows[jugadoresVisitante[i]?.id]?.puntos ?? 0)).length
@@ -462,8 +471,45 @@ function PanelEncuentro({
 
         <div className="p-6 space-y-6">
 
+          {/* ── Walkover por descalificación: vista informativa, sin edición ── */}
+          {esWalkover && (
+            <div className="bg-base rounded-xl border border-border p-5">
+              <div className="flex items-center gap-2 mb-6">
+                <Trophy size={16} className="text-primary" />
+                <h3 className="text-sm font-bold text-text">Resultado del Partido</h3>
+                <span className="ml-auto text-[11px] font-semibold bg-gray-100 text-gray-500 border border-gray-200 px-2.5 py-1 rounded-full">
+                  Walkover
+                </span>
+              </div>
+
+              <div className="flex items-center justify-center gap-8">
+                <div className="text-center">
+                  <p className="text-[11px] text-muted mb-1.5">{gradoL}</p>
+                  <p className={`text-5xl font-black ${encuentro.equipo_local?.descalificado ? 'text-muted/50 line-through decoration-2' : 'text-text'}`}>
+                    {resultadoExistente?.puntos_local}
+                  </p>
+                </div>
+                <span className="text-3xl font-black text-muted/40">–</span>
+                <div className="text-center">
+                  <p className="text-[11px] text-muted mb-1.5">{gradoV}</p>
+                  <p className={`text-5xl font-black ${encuentro.equipo_visitante?.descalificado ? 'text-muted/50 line-through decoration-2' : 'text-text'}`}>
+                    {resultadoExistente?.puntos_visitante}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border">
+                <p className="text-xs text-muted leading-relaxed max-w-md mx-auto text-center">
+                  Victoria otorgada por la descalificación de <strong className="text-text">{equipoDescalificado?.nombre_equipo}</strong>.
+                  El marcador es administrativo, según la convención del deporte, y este encuentro
+                  no registra estadísticas de jugadores.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* ── Resultado ────────────────────────────────────────────────── */}
-          {isAdmin && (
+          {isAdmin && !esWalkover && (
             <div className="bg-base rounded-xl border border-border p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Trophy size={16} className="text-primary" />
@@ -562,7 +608,7 @@ function PanelEncuentro({
           )}
 
           {/* ── Estadísticas individuales ─────────────────────────────── */}
-          {isAdmin && (
+          {isAdmin && !esWalkover && (
             <div className="bg-base rounded-xl border border-border overflow-hidden">
               <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border">
                 <Users size={15} className="text-primary" />
@@ -763,7 +809,7 @@ function PanelEncuentro({
           )}
 
           {/* ── Botón único + feedback ────────────────────────────────── */}
-          {isAdmin && (
+          {isAdmin && !esWalkover && (
             <div className="space-y-3">
               {error && (
                 <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2.5 rounded-lg">
@@ -787,7 +833,7 @@ function PanelEncuentro({
           )}
 
           {/* Modo solo lectura para no-admin */}
-          {!isAdmin && (
+          {!isAdmin && !esWalkover && (
             <div className="space-y-5">
               {/* Marcador */}
               <div className="bg-base rounded-xl border border-border p-5">

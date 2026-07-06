@@ -205,10 +205,19 @@ async function notificarBaja(equipo: any, rolActor: string) {
   }
 }
 
+// Marcador de walkover según la convención oficial de cada deporte
+const WALKOVER_POR_DEPORTE: Record<string, number> = {
+  futbol: 3,    // FIFA: 3-0
+  basquet: 20,  // FIBA: 20-0
+  voley: 3,     // FIVB: 3-0 en sets
+  pingpong: 3,  // ITTF: 3-0 en partidos individuales
+}
+
 // POST /equipos/:id/descalificar — solo admin. Regla del torneo:
 //  1. El equipo queda marcado descalificado (no se borra: el historial lo necesita)
 //  2. Se anulan las estadísticas de sus jugadores
-//  3. Todos sus encuentros pasan a finalizado con walkover (1-0) para el rival
+//  3. Todos sus encuentros pasan a finalizado con walkover para el rival
+//     (marcador según la convención del deporte)
 //  4. Se notifica al coordinador del grado y a los espectadores
 app.post('/equipos/:id/descalificar', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   if (req.user?.rol !== 'administrador') {
@@ -219,7 +228,7 @@ app.post('/equipos/:id/descalificar', requireAuth as any, async (req: Authentica
 
   const { data: equipo, error: errEquipo } = await supabaseAdmin
     .from('equipos')
-    .select('id, nombre_equipo, grado_id, deporte_id, descalificado, deportes(nombre), grados(nombre, pais_asignado)')
+    .select('id, nombre_equipo, grado_id, deporte_id, descalificado, deportes(nombre, slug), grados(nombre, pais_asignado)')
     .eq('id', id)
     .single() as { data: any; error: any }
 
@@ -247,7 +256,10 @@ app.post('/equipos/:id/descalificar', requireAuth as any, async (req: Authentica
     await supabaseAdmin.from('atletismo_sorteo').delete().in('participante_id', participanteIds)
   }
 
-  // 3. Walkover: todos sus encuentros quedan finalizados con victoria 1-0 del rival
+  // 3. Walkover: todos sus encuentros quedan finalizados con victoria del rival
+  //    por el marcador oficial del deporte (FIFA 3-0, FIBA 20-0, etc.)
+  const puntosWO = WALKOVER_POR_DEPORTE[equipo.deportes?.slug ?? ''] ?? 1
+
   const { data: encuentros } = await supabaseAdmin
     .from('encuentros')
     .select('id, equipo_local_id, equipo_visitante_id')
@@ -258,8 +270,8 @@ app.post('/equipos/:id/descalificar', requireAuth as any, async (req: Authentica
     await supabaseAdmin.from('resultados').upsert(
       {
         encuentro_id: enc.id,
-        puntos_local: esLocal ? 0 : 1,
-        puntos_visitante: esLocal ? 1 : 0,
+        puntos_local: esLocal ? 0 : puntosWO,
+        puntos_visitante: esLocal ? puntosWO : 0,
         registrado_por: req.user!.id,
       },
       { onConflict: 'encuentro_id' }

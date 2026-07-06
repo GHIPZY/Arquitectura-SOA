@@ -5,8 +5,8 @@ export interface EncuentroDB {
   fecha_hora: string
   estado: 'programado' | 'en_curso' | 'finalizado' | 'postergado'
   deportes: { id: string; nombre: string; slug: string } | null
-  equipo_local: { id: string; nombre_equipo: string; grados: { nombre: string; pais_asignado: string } | null } | null
-  equipo_visitante: { id: string; nombre_equipo: string; grados: { nombre: string; pais_asignado: string } | null } | null
+  equipo_local: { id: string; nombre_equipo: string; descalificado?: boolean; grados: { nombre: string; pais_asignado: string } | null } | null
+  equipo_visitante: { id: string; nombre_equipo: string; descalificado?: boolean; grados: { nombre: string; pais_asignado: string } | null } | null
   resultados: { encuentro_id: string; puntos_local: number; puntos_visitante: number }[] | null
 }
 
@@ -19,8 +19,8 @@ export interface EncuentroStats {
 }
 
 // Supabase devuelve `resultados` como objeto (relación 1-a-1) o array según el caso;
-// el resto del código espera siempre un array
-function normalizeEncuentros(data: any[]): EncuentroDB[] {
+// el resto del código espera siempre un array. Exportada para pruebas unitarias.
+export function normalizeEncuentros(data: any[]): EncuentroDB[] {
   return data.map(e => ({
     ...e,
     resultados: e.resultados == null ? [] : Array.isArray(e.resultados) ? e.resultados : [e.resultados],
