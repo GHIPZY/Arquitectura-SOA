@@ -68,11 +68,13 @@ export function DashboardPage() {
   const codigoMap: Record<string, string> = {}
   paisesDisponibles.forEach(gp => { codigoMap[gp.pais] = gp.codigo })
 
+  const torneoFinalizado = !!config?.fecha_fin_torneo && new Date() > new Date(config.fecha_fin_torneo)
+
   const stats = [
     { label: 'Equipos registrados', value: equipos.length,       icon: registroIcon      },
     { label: 'Participantes',        value: participantes,        icon: participantesIcon },
     { label: 'Encuentros hoy',       value: encuentrosHoy.length, icon: totalIcon         },
-    { label: 'Estado del torneo',    value: 'Activo',             icon: 'status_dot'      },
+    { label: 'Estado del torneo',    value: torneoFinalizado ? 'Finalizado' : 'Activo', icon: 'status_dot' },
   ]
 
   return (
@@ -85,8 +87,10 @@ export function DashboardPage() {
             <div className="w-12 h-12 flex items-center justify-center shrink-0">
               {icon === 'status_dot' ? (
                 <span className="relative flex h-3.5 w-3.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-green-500"></span>
+                  {!torneoFinalizado && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  )}
+                  <span className={`relative inline-flex rounded-full h-3.5 w-3.5 ${torneoFinalizado ? 'bg-gray-400' : 'bg-green-500'}`}></span>
                 </span>
               ) : (
                 <img src={icon} alt={label} className="w-11 h-11 object-contain" />

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MainLayout } from '@/layouts/MainLayout'
-import { Calendar, Trophy, Dumbbell, Save, Loader2, CheckCircle2, AlertTriangle, Table2 } from 'lucide-react'
-import { getConfig, setConfig, type AppConfig } from '@/services/config.service'
+import { Calendar, Trophy, Dumbbell, Save, Loader2, CheckCircle2, AlertTriangle, Table2, RefreshCw } from 'lucide-react'
+import { getConfig, setConfig, reiniciarTorneo, type AppConfig } from '@/services/config.service'
 import { Skeleton } from '@/shared/components/Skeleton'
 import { getDeportes } from '@/services/deportes.service'
 import { getAuthHeaders } from '@/services/auth.service'
@@ -43,7 +43,9 @@ export function ConfiguracionPage() {
   const { data: config, isLoading } = useQuery({
     queryKey: ['config'],
     queryFn: getConfig,
-    staleTime: 5 * 60 * 1000,
+    // Siempre fresco: el backend puede autoconfigurar fechas (fin del torneo)
+    // y esta página debe reflejarlo al volver a entrar
+    staleTime: 0,
   })
 
   const [draft, setDraft] = useState<Partial<AppConfig>>({})
@@ -56,6 +58,10 @@ export function ConfiguracionPage() {
   const [savingSets, setSavingSets]               = useState(false)
   const [successSets, setSuccessSets]             = useState(false)
   const [errorSets, setErrorSets]                 = useState<string | null>(null)
+  const [confirmReinicio, setConfirmReinicio]     = useState(false)
+  const [reiniciando, setReiniciando]             = useState(false)
+  const [msgReinicio, setMsgReinicio]             = useState<string | null>(null)
+  const [errorReinicio, setErrorReinicio]         = useState<string | null>(null)
 
   // Deportes — límites editables
   type DeporteDraft = { max_participantes: number; min_participantes: number }
@@ -107,12 +113,28 @@ export function ConfiguracionPage() {
     setSuccessSets(false)
   }
 
+  async function handleReiniciarTorneo() {
+    setReiniciando(true)
+    setErrorReinicio(null)
+    try {
+      const r = await reiniciarTorneo()
+      queryClient.invalidateQueries()   // todo cambió: encuentros, equipos, config...
+      setMsgReinicio(`Torneo reiniciado: ${r.equipos_rehabilitados} equipo(s) rehabilitado(s). Define las nuevas fechas.`)
+      setConfirmReinicio(false)
+    } catch (e: unknown) {
+      setErrorReinicio((e as Error).message)
+    } finally {
+      setReiniciando(false)
+    }
+  }
+
   async function handleGuardarSets() {
     setSavingSets(true)
     setErrorSets(null)
     setSuccessSets(false)
     try {
-      await setConfig(draft)
+      // Solo los campos de ESTA sección (no pisar valores de otras)
+      await setConfig({ sets_pingpong: draft.sets_pingpong ?? null })
       queryClient.invalidateQueries({ queryKey: ['config'] })
       setSuccessSets(true)
     } catch (e: unknown) {
@@ -127,7 +149,8 @@ export function ConfiguracionPage() {
     setErrorTorneo(null)
     setSuccessTorneo(false)
     try {
-      await setConfig(draft)
+      // Solo los campos de ESTA sección (no pisar valores de otras)
+      await setConfig({ nombre_torneo: draft.nombre_torneo ?? null, anio_torneo: draft.anio_torneo ?? null })
       queryClient.invalidateQueries({ queryKey: ['config'] })
       setSuccessTorneo(true)
     } catch (e: unknown) {
@@ -142,7 +165,11 @@ export function ConfiguracionPage() {
     setErrorInscr(null)
     setSuccessInscr(false)
     try {
-      await setConfig(draft)
+      // Solo los campos de ESTA sección (no pisar valores de otras)
+      await setConfig({
+        fecha_limite_inscripciones: draft.fecha_limite_inscripciones ?? null,
+        fecha_fin_torneo: draft.fecha_fin_torneo ?? null,
+      })
       queryClient.invalidateQueries({ queryKey: ['config'] })
       setSuccessInscr(true)
     } catch (e: unknown) {
@@ -236,12 +263,12 @@ export function ConfiguracionPage() {
           {/* Inscripciones */}
           <Seccion
             icon={<Calendar size={17} className="text-primary" />}
-            title="Período de inscripciones"
-            description="Define hasta cuándo los coordinadores pueden inscribir jugadores y equipos"
+            title="Ciclo del torneo"
+            description="Cierre de inscripciones y fin del torneo"
           >
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-muted">Fecha y hora límite</label>
-              <div className="flex items-center gap-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-muted">Límite de inscripciones</label>
                 <input
                   type="datetime-local"
                   value={draft.fecha_limite_inscripciones
@@ -250,22 +277,32 @@ export function ConfiguracionPage() {
                   onChange={e => set('fecha_limite_inscripciones', e.target.value
                     ? new Date(e.target.value).toISOString()
                     : null)}
-                  className="text-sm border border-border rounded-xl px-3 py-2.5 bg-base text-text outline-none focus:border-primary transition-colors"
+                  className="w-full text-sm border border-border rounded-xl px-3 py-2.5 bg-base text-text outline-none focus:border-primary transition-colors"
                 />
-                {draft.fecha_limite_inscripciones && (
-                  <button
-                    onClick={() => set('fecha_limite_inscripciones', null)}
-                    className="text-xs underline cursor-pointer text-muted hover:text-text"
-                  >
-                    Quitar límite
-                  </button>
+                {draft.fecha_limite_inscripciones && new Date() > new Date(draft.fecha_limite_inscripciones) && (
+                  <p className="mt-1 text-xs font-medium text-red-600">
+                    Esta fecha ya pasó — las inscripciones están cerradas.
+                  </p>
                 )}
               </div>
-              {draft.fecha_limite_inscripciones && new Date() > new Date(draft.fecha_limite_inscripciones) && (
-                <p className="mt-1 text-xs font-medium text-red-600">
-                  Esta fecha ya pasó — las inscripciones están cerradas.
-                </p>
-              )}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-muted">Fin del torneo</label>
+                <input
+                  type="datetime-local"
+                  value={draft.fecha_fin_torneo
+                    ? toLocalInput(draft.fecha_fin_torneo)
+                    : ''}
+                  onChange={e => set('fecha_fin_torneo', e.target.value
+                    ? new Date(e.target.value).toISOString()
+                    : null)}
+                  className="w-full text-sm border border-border rounded-xl px-3 py-2.5 bg-base text-text outline-none focus:border-primary transition-colors"
+                />
+                {draft.fecha_fin_torneo && new Date() > new Date(draft.fecha_fin_torneo) && (
+                  <p className="mt-1 text-xs font-medium text-warning">
+                    El torneo figura como finalizado — ya no se registran resultados.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-3 mt-4">
               <button
@@ -376,6 +413,57 @@ export function ConfiguracionPage() {
               {savingDeportes ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               {savingDeportes ? 'Guardando...' : 'Guardar límites'}
             </button>
+          </Seccion>
+
+          {/* Nuevo torneo */}
+          <Seccion
+            icon={<RefreshCw size={17} className="text-primary" />}
+            title="Iniciar nuevo torneo"
+            description="Borra encuentros, resultados y estadísticas del ciclo anterior; los equipos, jugadores y cuentas se conservan y los equipos descalificados vuelven a estar habilitados"
+          >
+            {msgReinicio && (
+              <div className="flex items-center gap-2 px-3 py-2.5 mb-3 text-xs border text-success bg-success/10 border-success/20 rounded-xl">
+                <CheckCircle2 size={13} /> {msgReinicio}
+              </div>
+            )}
+            {!confirmReinicio ? (
+              <button
+                onClick={() => { setConfirmReinicio(true); setMsgReinicio(null) }}
+                className="flex items-center gap-2 px-5 py-2.5 border border-border text-sm font-bold text-text rounded-xl hover:border-neutral-400 transition-all cursor-pointer"
+              >
+                <RefreshCw size={14} />
+                Iniciar nuevo torneo...
+              </button>
+            ) : (
+              <div className="p-4 border border-warning/40 bg-warning/5 rounded-xl space-y-3">
+                <p className="text-xs text-text leading-relaxed">
+                  <strong>¿Seguro?</strong> Se eliminarán todos los encuentros, resultados y estadísticas
+                  del torneo actual. Esta acción no se puede deshacer.
+                </p>
+                {errorReinicio && (
+                  <p className="text-xs text-red-600 flex items-center gap-1.5">
+                    <AlertTriangle size={12} /> {errorReinicio}
+                  </p>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleReiniciarTorneo}
+                    disabled={reiniciando}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-all disabled:opacity-60 cursor-pointer"
+                  >
+                    {reiniciando ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                    {reiniciando ? 'Reiniciando...' : 'Sí, iniciar nuevo torneo'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmReinicio(false)}
+                    disabled={reiniciando}
+                    className="px-4 py-2 border border-border text-xs text-muted rounded-lg hover:text-text cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
           </Seccion>
 
         </div>

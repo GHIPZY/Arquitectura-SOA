@@ -136,10 +136,35 @@ app.get('/resultados', requireAuth as any, async (req: AuthenticatedRequest, res
   return res.json(data)
 })
 
+// Helper — verifica si el torneo ya terminó (fecha_fin_torneo en configuración)
+async function torneoFinalizado(): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from('configuracion')
+    .select('valor')
+    .eq('clave', 'fecha_fin_torneo')
+    .maybeSingle()
+  if (!data?.valor) return false
+  return new Date() > new Date(data.valor)
+}
+
 // POST /resultados — registrar resultado
 app.post('/resultados', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   if (!['administrador'].includes(req.user?.rol ?? '')) {
     return res.status(403).json({ error: 'Sin permisos para registrar resultados.' })
+  }
+
+  // Torneo finalizado: se permite COMPLETAR encuentros sin resultado (datos
+  // pendientes), pero no MODIFICAR resultados ya registrados (la historia se congela)
+  if (await torneoFinalizado()) {
+    const { data: existente } = await supabaseAdmin
+      .from('resultados')
+      .select('encuentro_id')
+      .eq('encuentro_id', req.body.encuentro_id)
+      .maybeSingle()
+
+    if (existente) {
+      return res.status(403).json({ error: 'El torneo ya finalizó. Los resultados registrados no se pueden modificar.' })
+    }
   }
 
   const { encuentro_id, puntos_local, puntos_visitante } = req.body
@@ -172,6 +197,10 @@ app.post('/resultados', requireAuth as any, async (req: AuthenticatedRequest, re
 app.delete('/resultados/:encuentro_id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   if (!['administrador'].includes(req.user?.rol ?? '')) {
     return res.status(403).json({ error: 'Sin permisos para eliminar resultados.' })
+  }
+
+  if (await torneoFinalizado()) {
+    return res.status(403).json({ error: 'El torneo ya finalizó. Los resultados registrados no se pueden eliminar.' })
   }
 
   const { error } = await supabaseAdmin

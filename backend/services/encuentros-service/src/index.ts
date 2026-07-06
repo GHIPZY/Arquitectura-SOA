@@ -12,8 +12,8 @@ app.use(express.json())
 const SELECT_ENCUENTRO = `
   id, fecha_hora, estado, deporte_id, equipo_local_id, equipo_visitante_id,
   deportes(id, nombre, slug),
-  equipo_local:equipos!equipo_local_id(id, nombre_equipo, grados(nombre, pais_asignado)),
-  equipo_visitante:equipos!equipo_visitante_id(id, nombre_equipo, grados(nombre, pais_asignado)),
+  equipo_local:equipos!equipo_local_id(id, nombre_equipo, descalificado, grados(nombre, pais_asignado)),
+  equipo_visitante:equipos!equipo_visitante_id(id, nombre_equipo, descalificado, grados(nombre, pais_asignado)),
   resultados(encuentro_id, puntos_local, puntos_visitante)
 `.trim()
 
@@ -156,10 +156,68 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
+// ── Fechas de fixture dentro de la ventana del torneo ──────────────────────
+// Los partidos se reparten uniformemente entre mañana (10:00) y el fin del
+// torneo, con horas comprimidas al horario deportivo (10:00–22:00).
+// Si el admin no definió el fin, el sistema asume la duración estándar de un
+// torneo escolar (30 días) y la registra automáticamente en la configuración.
+const DURACION_TORNEO_DIAS = 30
+
+async function fechasParaFixture(totalPartidos: number): Promise<Date[]> {
+  const inicio = new Date()
+  inicio.setDate(inicio.getDate() + 1)
+  inicio.setHours(10, 0, 0, 0)
+
+  const { data } = await supabaseAdmin
+    .from('configuracion')
+    .select('valor')
+    .eq('clave', 'fecha_fin_torneo')
+    .maybeSingle()
+  const finConfig = data?.valor ? new Date(data.valor) : null
+
+  let fin: Date
+  if (finConfig && finConfig > inicio) {
+    fin = finConfig
+  } else {
+    // Sin fecha válida: duración estándar, y el sistema la deja configurada
+    fin = new Date(inicio.getTime() + DURACION_TORNEO_DIAS * 24 * 60 * 60 * 1000)
+    await supabaseAdmin
+      .from('configuracion')
+      .upsert({ clave: 'fecha_fin_torneo', valor: fin.toISOString() }, { onConflict: 'clave' })
+    console.log(`[Fixture] fecha_fin_torneo autoconfigurada (+${DURACION_TORNEO_DIAS} días): ${fin.toISOString()}`)
+  }
+
+  const DIA_MS = 24 * 60 * 60 * 1000
+  const paso = (fin.getTime() - inicio.getTime()) / Math.max(totalPartidos, 1)
+  return Array.from({ length: totalPartidos }, (_, i) => {
+    const offset = paso * i
+    // Día del torneo en que cae el partido + su posición dentro de ese día,
+    // mapeada al horario deportivo (10:00–22:00) en cuartos de hora.
+    // El primer partido siempre abre a las 10:00.
+    const dias = Math.floor(offset / DIA_MS)
+    const fraccionDia = (offset % DIA_MS) / DIA_MS
+    const minutosVentana = Math.round((fraccionDia * 12 * 60) / 15) * 15
+    const f = new Date(inicio.getTime() + dias * DIA_MS)
+    f.setHours(10 + Math.floor(minutosVentana / 60), minutosVentana % 60, 0, 0)
+    return f
+  })
+}
+
 // POST /encuentros/generar-torneo — genera fixtures round-robin con fechas automáticas
+// Atletismo no compite por enfrentamientos: usa pruebas individuales con
+// sorteo de carriles (estadisticas-service). No se le generan encuentros.
+async function esAtletismo(deporte_id: string): Promise<boolean> {
+  const { data } = await supabaseAdmin.from('deportes').select('slug').eq('id', deporte_id).single()
+  return data?.slug === 'atletismo'
+}
+
 app.post('/encuentros/generar-torneo', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   const { deporte_id } = req.body as { deporte_id: string }
   if (!deporte_id) return res.status(400).json({ error: 'deporte_id requerido' })
+
+  if (await esAtletismo(deporte_id)) {
+    return res.status(400).json({ error: 'Atletismo no usa encuentros: su competencia es por pruebas con sorteo de carriles.' })
+  }
 
   const { data: equipos, error: errEq } = await supabaseAdmin
     .from('equipos')
@@ -179,22 +237,20 @@ app.post('/encuentros/generar-torneo', requireAuth as any, async (req: Authentic
     return res.status(409).json({ error: 'Ya existen encuentros para este deporte.', code: 'YA_EXISTE' })
   }
 
-  const fechaBase = new Date()
-  fechaBase.setDate(fechaBase.getDate() + 1)
-  fechaBase.setHours(10, 0, 0, 0)
+  const equiposMezclados = shuffle(equipos)
+  const totalPartidos = equiposMezclados.length * (equiposMezclados.length - 1) / 2
+  const fechas = await fechasParaFixture(totalPartidos)
   let idx = 0
 
-  const equiposMezclados = shuffle(equipos)
   const partidos: { deporte_id: string; equipo_local_id: string; equipo_visitante_id: string; estado: string; fecha_hora: string }[] = []
   for (let i = 0; i < equiposMezclados.length; i++) {
     for (let j = i + 1; j < equiposMezclados.length; j++) {
-      const fecha = new Date(fechaBase.getTime() + idx * 3 * 24 * 60 * 60 * 1000)
       partidos.push({
         deporte_id,
         equipo_local_id:    equiposMezclados[i].id,
         equipo_visitante_id: equiposMezclados[j].id,
         estado:    'programado',
-        fecha_hora: fecha.toISOString(),
+        fecha_hora: fechas[idx].toISOString(),
       })
       idx++
     }
@@ -211,6 +267,10 @@ app.post('/encuentros/regenerar-torneo', requireAuth as any, async (req: Authent
   if (!deporte_id) return res.status(400).json({ error: 'deporte_id requerido' })
   if (!confirmar)  return res.status(400).json({ error: 'Confirmación requerida.', code: 'CONFIRMAR' })
 
+  if (await esAtletismo(deporte_id)) {
+    return res.status(400).json({ error: 'Atletismo no usa encuentros: su competencia es por pruebas con sorteo de carriles.' })
+  }
+
   const { error: errDel } = await supabaseAdmin
     .from('encuentros')
     .delete()
@@ -221,22 +281,20 @@ app.post('/encuentros/regenerar-torneo', requireAuth as any, async (req: Authent
   const { data: equipos } = await supabaseAdmin.from('equipos').select('id').eq('deporte_id', deporte_id).eq('descalificado', false)
   if (!equipos || equipos.length < 2) return res.status(400).json({ error: 'Se necesitan al menos 2 equipos.' })
 
-  const fechaBase2 = new Date()
-  fechaBase2.setDate(fechaBase2.getDate() + 1)
-  fechaBase2.setHours(10, 0, 0, 0)
+  const equiposMezclados2 = shuffle(equipos)
+  const totalPartidos2 = equiposMezclados2.length * (equiposMezclados2.length - 1) / 2
+  const fechas2 = await fechasParaFixture(totalPartidos2)
   let idx2 = 0
 
-  const equiposMezclados2 = shuffle(equipos)
   const partidos: { deporte_id: string; equipo_local_id: string; equipo_visitante_id: string; estado: string; fecha_hora: string }[] = []
   for (let i = 0; i < equiposMezclados2.length; i++) {
     for (let j = i + 1; j < equiposMezclados2.length; j++) {
-      const fecha = new Date(fechaBase2.getTime() + idx2 * 3 * 24 * 60 * 60 * 1000)
       partidos.push({
         deporte_id,
         equipo_local_id:    equiposMezclados2[i].id,
         equipo_visitante_id: equiposMezclados2[j].id,
         estado:    'programado',
-        fecha_hora: fecha.toISOString(),
+        fecha_hora: fechas2[idx2].toISOString(),
       })
       idx2++
     }
@@ -296,12 +354,34 @@ app.get('/config', async (_req, res: Response) => {
 
   const cfg: Record<string, string | null> = {
     fecha_limite_inscripciones: null,
+    fecha_fin_torneo: null,
     nombre_torneo: null,
     anio_torneo: null,
     limite_deportes_grado: null,
     sets_pingpong: null,
   }
   data?.forEach(row => { cfg[row.clave] = row.valor })
+
+  // Auto-curación: si no hay fecha de fin pero ya existen encuentros programados,
+  // se deduce del último partido (+1 día) y se persiste para el resto del sistema
+  if (!cfg.fecha_fin_torneo) {
+    const { data: ultimo } = await supabaseAdmin
+      .from('encuentros')
+      .select('fecha_hora')
+      .order('fecha_hora', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (ultimo?.fecha_hora) {
+      const finAuto = new Date(new Date(ultimo.fecha_hora).getTime() + 24 * 60 * 60 * 1000)
+      await supabaseAdmin
+        .from('configuracion')
+        .upsert({ clave: 'fecha_fin_torneo', valor: finAuto.toISOString() }, { onConflict: 'clave' })
+      cfg.fecha_fin_torneo = finAuto.toISOString()
+      console.log(`[Config] fecha_fin_torneo deducida del último encuentro: ${finAuto.toISOString()}`)
+    }
+  }
+
   return res.json(cfg)
 })
 
@@ -327,15 +407,85 @@ app.put('/config', requireAuth as any, async (req: AuthenticatedRequest, res: Re
   return res.json({ ok: true })
 })
 
-// ── Usuarios (coordinadores / espectadores) ───────────────────────────────
+// ── Ciclo de vida del torneo ───────────────────────────────────────────────
 
-app.get('/usuarios', requireAuth as any, async (_req: AuthenticatedRequest, res: Response) => {
-  const { data, error } = await supabaseAdmin
+// POST /torneo/reiniciar — solo admin. Borra y cuenta nueva para una nueva edición:
+// se limpian encuentros, resultados y estadísticas, y los equipos descalificados
+// vuelven a estar habilitados. Los equipos, jugadores y cuentas se conservan.
+app.post('/torneo/reiniciar', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.rol !== 'administrador') {
+    return res.status(403).json({ error: 'Solo el administrador puede iniciar un nuevo torneo.' })
+  }
+
+  const { confirmar } = req.body as { confirmar?: boolean }
+  if (!confirmar) return res.status(400).json({ error: 'Confirmación requerida.', code: 'CONFIRMAR' })
+
+  // Orden importa: primero lo que referencia encuentros, luego encuentros
+  await supabaseAdmin.from('resultados').delete().not('encuentro_id', 'is', null)
+  await supabaseAdmin.from('estadisticas_jugador').delete().not('participante_id', 'is', null)
+  await supabaseAdmin.from('atletismo_resultados').delete().not('id', 'is', null)
+  await supabaseAdmin.from('atletismo_sorteo').delete().gte('carril', 0)
+  await supabaseAdmin.from('encuentros').delete().not('id', 'is', null)
+
+  // Rehabilitar equipos descalificados en toda la plataforma
+  const { data: rehabilitados } = await supabaseAdmin
+    .from('equipos')
+    .update({ descalificado: false })
+    .eq('descalificado', true)
+    .select('id')
+
+  // Limpiar las fechas del ciclo anterior (el admin define las nuevas)
+  await supabaseAdmin.from('configuracion').delete().in('clave', ['fecha_limite_inscripciones', 'fecha_fin_torneo', 'cierre_notificado', 'fin_notificado'])
+
+  // Avisar a todos los roles
+  await supabaseAdmin.from('notificaciones').insert(
+    ['administrador', 'coordinador', 'espectador'].map(rol => ({
+      rol_destino: rol,
+      tipo: 'encuentro',
+      titulo: 'Nuevo torneo iniciado',
+      mensaje: 'Se reinició el torneo: los resultados anteriores fueron archivados y todos los equipos están habilitados.',
+    }))
+  )
+
+  return res.json({ ok: true, equipos_rehabilitados: rehabilitados?.length ?? 0 })
+})
+
+// ── Usuarios (coordinadores / espectadores) ───────────────────────────────
+// Reglas por rol:
+//  - administrador: gestiona coordinadores y espectadores de todo el torneo
+//  - coordinador:   gestiona SOLO espectadores de su propio grado (sus alumnos)
+
+async function gradoDelCoordinador(userId: string): Promise<{ grado_id: string; institucion_id: string | null } | null> {
+  const { data } = await supabaseAdmin
+    .from('usuarios')
+    .select('grado_id, institucion_id')
+    .eq('id', userId)
+    .single()
+  return data?.grado_id ? { grado_id: data.grado_id, institucion_id: data.institucion_id ?? null } : null
+}
+
+app.get('/usuarios', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  const rolActor = req.user?.rol ?? ''
+  if (!['administrador', 'coordinador'].includes(rolActor)) {
+    return res.status(403).json({ error: 'Sin permisos para listar usuarios.' })
+  }
+
+  let query = supabaseAdmin
     .from('usuarios')
     .select(`id, nombre, email, rol, grado_id, institucion_id,
       grados(nombre, pais_asignado)`)
-    .in('rol', ['coordinador', 'espectador'])
     .order('nombre')
+
+  if (rolActor === 'administrador') {
+    query = query.in('rol', ['coordinador', 'espectador'])
+  } else {
+    // Coordinador: solo los espectadores de su grado
+    const actor = await gradoDelCoordinador(req.user!.id)
+    if (!actor) return res.status(403).json({ error: 'No tienes un grado asignado.' })
+    query = query.eq('rol', 'espectador').eq('grado_id', actor.grado_id)
+  }
+
+  const { data, error } = await query
 
   if (error) return res.status(500).json({ error: error.message })
 
@@ -363,7 +513,25 @@ app.get('/usuarios', requireAuth as any, async (_req: AuthenticatedRequest, res:
 })
 
 app.post('/usuarios', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
-  const { nombre, email, password, rol, grado_id, institucion_id } = req.body
+  const rolActor = req.user?.rol ?? ''
+  if (!['administrador', 'coordinador'].includes(rolActor)) {
+    return res.status(403).json({ error: 'Sin permisos para crear usuarios.' })
+  }
+
+  const { nombre, email, password } = req.body
+  let { rol, grado_id, institucion_id } = req.body
+
+  if (rolActor === 'coordinador') {
+    // El coordinador solo puede crear espectadores, y siempre de SU grado
+    // (se ignora lo que venga en el body: la regla la impone el servidor)
+    const actor = await gradoDelCoordinador(req.user!.id)
+    if (!actor) return res.status(403).json({ error: 'No tienes un grado asignado.' })
+    rol = 'espectador'
+    grado_id = actor.grado_id
+    institucion_id = actor.institucion_id
+  } else if (!['coordinador', 'espectador'].includes(rol)) {
+    return res.status(400).json({ error: 'Rol inválido.' })
+  }
 
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email, password, email_confirm: true,
@@ -381,6 +549,26 @@ app.post('/usuarios', requireAuth as any, async (req: AuthenticatedRequest, res:
 
 app.delete('/usuarios/:id', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params
+  const rolActor = req.user?.rol ?? ''
+
+  if (rolActor === 'coordinador') {
+    // Solo puede eliminar espectadores de su propio grado
+    const actor = await gradoDelCoordinador(req.user!.id)
+    if (!actor) return res.status(403).json({ error: 'No tienes un grado asignado.' })
+
+    const { data: objetivo } = await supabaseAdmin
+      .from('usuarios')
+      .select('rol, grado_id')
+      .eq('id', id)
+      .single()
+
+    if (!objetivo || objetivo.rol !== 'espectador' || objetivo.grado_id !== actor.grado_id) {
+      return res.status(403).json({ error: 'Solo puedes eliminar espectadores de tu grado.' })
+    }
+  } else if (rolActor !== 'administrador') {
+    return res.status(403).json({ error: 'Sin permisos para eliminar usuarios.' })
+  }
+
   await supabaseAdmin.from('usuarios').delete().eq('id', id)
   await supabaseAdmin.auth.admin.deleteUser(id)
   return res.json({ ok: true })
@@ -421,8 +609,13 @@ async function autoSorteo() {
     const ahora = new Date()
     if (ahora < new Date(fechaLimite)) return
 
-    // Fecha límite ya pasó — generar torneos para deportes que tengan equipos pero no encuentros
-    const { data: deportes } = await supabaseAdmin.from('deportes').select('id').eq('activo', true)
+    // Fecha límite ya pasó — generar torneos para deportes que tengan equipos pero
+    // no encuentros (atletismo se excluye: compite por pruebas, no enfrentamientos)
+    const { data: deportes } = await supabaseAdmin
+      .from('deportes')
+      .select('id, slug')
+      .eq('activo', true)
+      .neq('slug', 'atletismo')
     if (!deportes) return
 
     for (const deporte of deportes) {
@@ -438,20 +631,18 @@ async function autoSorteo() {
 
       // Generar round-robin con shuffle
       const mezclados = shuffle([...equipos])
-      const fechaBase = new Date()
-      fechaBase.setDate(fechaBase.getDate() + 1)
-      fechaBase.setHours(10, 0, 0, 0)
+      const totalPartidos = mezclados.length * (mezclados.length - 1) / 2
+      const fechas = await fechasParaFixture(totalPartidos)
       let idx = 0
       const partidos = []
       for (let i = 0; i < mezclados.length; i++) {
         for (let j = i + 1; j < mezclados.length; j++) {
-          const fecha = new Date(fechaBase.getTime() + idx * 3 * 24 * 60 * 60 * 1000)
           partidos.push({
             deporte_id: deporte.id,
             equipo_local_id: mezclados[i].id,
             equipo_visitante_id: mezclados[j].id,
             estado: 'programado',
-            fecha_hora: fecha.toISOString(),
+            fecha_hora: fechas[idx].toISOString(),
           })
           idx++
         }
@@ -464,7 +655,99 @@ async function autoSorteo() {
   }
 }
 
-setInterval(() => { autoSorteo(); autoEnCurso() }, 60 * 1000) // cada minuto
+// ── Aviso de cierre de inscripciones: notifica UNA vez cuando vence la fecha ──
+// El marcador 'cierre_notificado' guarda para qué fecha límite ya se avisó; si el
+// admin cambia la fecha, el nuevo vencimiento genera un nuevo aviso.
+async function notificarCierreInscripciones() {
+  try {
+    const { data: cfg } = await supabaseAdmin
+      .from('configuracion')
+      .select('clave, valor')
+      .in('clave', ['fecha_limite_inscripciones', 'cierre_notificado'])
+
+    const fechaLimite = cfg?.find(c => c.clave === 'fecha_limite_inscripciones')?.valor
+    const yaNotificado = cfg?.find(c => c.clave === 'cierre_notificado')?.valor
+
+    if (!fechaLimite) return
+    if (new Date() < new Date(fechaLimite)) return
+    if (yaNotificado === fechaLimite) return   // ya se avisó para esta fecha
+
+    await supabaseAdmin.from('notificaciones').insert([
+      {
+        rol_destino: 'coordinador',
+        tipo: 'encuentro',
+        titulo: 'Inscripciones cerradas',
+        mensaje: 'El período de inscripciones ha finalizado. Ya no es posible modificar equipos ni jugadores. Los encuentros se generarán automáticamente.',
+      },
+      {
+        rol_destino: 'espectador',
+        tipo: 'encuentro',
+        titulo: '¡Comienza el torneo!',
+        mensaje: 'Las inscripciones han cerrado. Pronto podrás ver el calendario de encuentros programados.',
+      },
+    ])
+
+    await supabaseAdmin
+      .from('configuracion')
+      .upsert({ clave: 'cierre_notificado', valor: fechaLimite }, { onConflict: 'clave' })
+
+    console.log('[Notif-cierre] Aviso de cierre de inscripciones enviado')
+  } catch (err) {
+    console.error('[Notif-cierre] Error:', err)
+  }
+}
+
+// ── Aviso de fin del torneo: notifica UNA vez cuando vence fecha_fin_torneo ──
+async function notificarFinTorneo() {
+  try {
+    const { data: cfg } = await supabaseAdmin
+      .from('configuracion')
+      .select('clave, valor')
+      .in('clave', ['fecha_fin_torneo', 'fin_notificado', 'nombre_torneo', 'anio_torneo'])
+
+    const fechaFin = cfg?.find(c => c.clave === 'fecha_fin_torneo')?.valor
+    const yaNotificado = cfg?.find(c => c.clave === 'fin_notificado')?.valor
+
+    if (!fechaFin) return
+    if (new Date() < new Date(fechaFin)) return
+    if (yaNotificado === fechaFin) return
+
+    const nombre = cfg?.find(c => c.clave === 'nombre_torneo')?.valor ?? 'El torneo'
+    const anio   = cfg?.find(c => c.clave === 'anio_torneo')?.valor ?? ''
+    const titulo = `${nombre} ${anio}`.trim()
+
+    await supabaseAdmin.from('notificaciones').insert([
+      {
+        rol_destino: 'administrador',
+        tipo: 'encuentro',
+        titulo: 'Torneo finalizado',
+        mensaje: `${titulo} ha llegado a su fin. El registro de resultados quedó cerrado. Puedes iniciar un nuevo torneo desde Configuración.`,
+      },
+      {
+        rol_destino: 'coordinador',
+        tipo: 'encuentro',
+        titulo: 'Torneo finalizado',
+        mensaje: `${titulo} ha llegado a su fin. Revisa la tabla de posiciones para ver la clasificación final de tus equipos.`,
+      },
+      {
+        rol_destino: 'espectador',
+        tipo: 'encuentro',
+        titulo: `¡${titulo} ha finalizado!`,
+        mensaje: 'Gracias por acompañarnos. Revisa la tabla de posiciones para conocer a los campeones.',
+      },
+    ])
+
+    await supabaseAdmin
+      .from('configuracion')
+      .upsert({ clave: 'fin_notificado', valor: fechaFin }, { onConflict: 'clave' })
+
+    console.log('[Notif-fin] Aviso de fin del torneo enviado')
+  } catch (err) {
+    console.error('[Notif-fin] Error:', err)
+  }
+}
+
+setInterval(() => { autoSorteo(); autoEnCurso(); notificarCierreInscripciones(); notificarFinTorneo() }, 60 * 1000) // cada minuto
 
 // PUT /me/password — cambiar contraseña del usuario autenticado
 app.put('/me/password', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
