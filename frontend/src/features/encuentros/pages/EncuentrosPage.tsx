@@ -5,6 +5,7 @@ import { ChevronDown, Pencil, Check, X, Loader2 } from 'lucide-react'
 import { BanderaPais } from '@/shared/components/BanderaPais'
 import { SkeletonRows } from '@/shared/components/Skeleton'
 import { getEncuentros, type EncuentroDB } from '@/services/encuentros.service'
+import { getAtletismoSorteo } from '@/services/atletismo.service'
 import { getDeportes } from '@/services/deportes.service'
 import { getAuthHeaders } from '@/services/auth.service'
 import { updateEncuentro } from '@/services/admin.service'
@@ -91,15 +92,33 @@ export function EncuentrosPage() {
   const codigoMap: Record<string, string> = {}
   gradosPaises.forEach(gp => { codigoMap[gp.pais] = gp.codigo })
 
+  const deporteActual = deportes.find(d => d.id === deporteId)
+  const esAtletismo = deporteActual?.slug === 'atletismo'
+
   const { data: encuentros = [], isLoading } = useQuery<EncuentroDB[]>({
     queryKey: ['encuentros', deporteId, estadoFiltro],
     queryFn: () => getEncuentros({
       deporte_id: deporteId !== 'todos' ? deporteId : undefined,
       estado:     estadoFiltro !== 'todos' ? estadoFiltro : undefined,
     }),
+    enabled: !esAtletismo,
     // el cron del backend actualiza estados cada 60s; refrescar al mismo ritmo
     refetchInterval: 60_000,
   })
+
+  // Atletismo no tiene encuentros: se muestran sus pruebas con carriles sorteados
+  const { data: carriles = [] } = useQuery({
+    queryKey: ['atletismo-sorteo'],
+    queryFn: () => getAtletismoSorteo(),
+    enabled: esAtletismo,
+    staleTime: 60_000,
+  })
+
+  const pruebasAgrupadas = carriles.reduce((acc, c) => {
+    if (!acc[c.prueba]) acc[c.prueba] = []
+    acc[c.prueba].push(c)
+    return acc
+  }, {} as Record<string, typeof carriles>)
 
   const conteos = COUNTER_CFG.reduce((acc, { key }) => {
     acc[key] = encuentros.filter(e => e.estado === key).length
@@ -164,7 +183,48 @@ export function EncuentrosPage() {
         </div>
       </div>
 
+      {/* Vista atletismo: pruebas con carriles sorteados (no hay encuentros) */}
+      {esAtletismo && (
+        <div className="space-y-4">
+          {Object.keys(pruebasAgrupadas).length === 0 ? (
+            <div className="bg-surface border border-border rounded-xl py-16 text-center px-6">
+              <p className="text-sm font-bold text-text mb-1">Atletismo compite por pruebas individuales</p>
+              <p className="text-xs text-muted max-w-md mx-auto leading-relaxed">
+                Aquí verás las pruebas con sus atletas y carriles. El sorteo de carriles se genera
+                automáticamente al cerrar las inscripciones (o desde la sección Sorteo).
+              </p>
+            </div>
+          ) : (
+            Object.entries(pruebasAgrupadas).map(([prueba, atletas]) => (
+              <div key={prueba} className="bg-surface border border-border rounded-xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-border bg-base flex items-center justify-between">
+                  <p className="text-sm font-bold text-text">{prueba}</p>
+                  <span className="text-xs text-muted">{atletas.length} atleta{atletas.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="divide-y divide-border">
+                  {[...atletas].sort((a, b) => a.carril - b.carril).map(a => {
+                    const pais   = a.participantes?.equipos?.grados?.pais_asignado ?? null
+                    const codigo = pais ? (codigoMap[pais] ?? '') : ''
+                    return (
+                      <div key={`${prueba}-${a.participante_id}`} className="flex items-center gap-3 px-5 py-2.5">
+                        <span className="w-14 text-[11px] font-bold text-primary shrink-0">Carril {a.carril}</span>
+                        {codigo && <BanderaPais codigo={codigo} />}
+                        <span className="text-sm font-semibold text-text">{a.participantes?.nombre_completo ?? '—'}</span>
+                        <span className="text-xs text-muted ml-auto">
+                          {a.participantes?.equipos?.grados?.nombre ?? ''}{pais ? ` · ${pais}` : ''}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
       {/* Contadores */}
+      {!esAtletismo && (
       <div className="grid grid-cols-4 gap-3 mb-5">
         {COUNTER_CFG.map(({ key, label, icon, cls }) => (
           <div key={key} className="bg-surface border border-border rounded-xl p-4 flex items-center gap-3">
@@ -178,8 +238,10 @@ export function EncuentrosPage() {
           </div>
         ))}
       </div>
+      )}
 
       {/* Tabla */}
+      {!esAtletismo && (
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         {isLoading ? (
           <SkeletonRows rows={6} avatar cols={4} />
@@ -288,6 +350,7 @@ export function EncuentrosPage() {
           </table>
         )}
       </div>
+      )}
     </MainLayout>
   )
 }

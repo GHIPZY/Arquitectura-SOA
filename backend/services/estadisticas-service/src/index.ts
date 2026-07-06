@@ -191,10 +191,8 @@ app.get('/atletismo/sorteo', requireAuth as any, async (req: AuthenticatedReques
   return res.json(data ?? [])
 })
 
-// ─── POST /atletismo/sorteo/generar — sorteo aleatorio de carriles ───────────
-app.post('/atletismo/sorteo/generar', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
-  if (req.user?.rol !== 'administrador') return res.status(403).json({ error: 'Sin permisos.' })
-
+// ─── Sorteo de carriles de atletismo (lógica compartida: manual y automático) ──
+async function generarSorteoCarriles(): Promise<{ total: number; pruebas: number; omitidas: { prueba: string; inscritos: number }[] }> {
   const { data: participantes, error } = await supabaseAdmin
     .from('participantes')
     .select('id, posicion, equipos!inner(descalificado, deportes!inner(slug))')
@@ -203,7 +201,7 @@ app.post('/atletismo/sorteo/generar', requireAuth as any, async (req: Authentica
     .eq('equipos.descalificado', false)
     .not('posicion', 'is', null)
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) throw new Error(error.message)
 
   const byPrueba: Record<string, string[]> = {}
   participantes?.forEach(p => {
@@ -226,20 +224,60 @@ app.post('/atletismo/sorteo/generar', requireAuth as any, async (req: Authentica
 
   await supabaseAdmin.from('atletismo_sorteo').delete().gte('carril', 1)
 
-  if (rows.length === 0) {
-    return res.json({ total: 0, pruebas: 0, omitidas })
-  }
+  if (rows.length === 0) return { total: 0, pruebas: 0, omitidas }
 
   const { data: inserted, error: insertError } = await supabaseAdmin
     .from('atletismo_sorteo').insert(rows).select()
 
-  if (insertError) return res.status(400).json({ error: insertError.message })
-  return res.status(201).json({
+  if (insertError) throw new Error(insertError.message)
+  return {
     total: inserted?.length ?? 0,
     pruebas: Object.keys(byPrueba).filter(p => !omitidas.find(o => o.prueba === p)).length,
     omitidas,
-  })
+  }
+}
+
+// ─── POST /atletismo/sorteo/generar — sorteo aleatorio de carriles (manual) ──
+app.post('/atletismo/sorteo/generar', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.rol !== 'administrador') return res.status(403).json({ error: 'Sin permisos.' })
+
+  try {
+    const resultado = await generarSorteoCarriles()
+    return res.status(resultado.total > 0 ? 201 : 200).json(resultado)
+  } catch (e: unknown) {
+    return res.status(500).json({ error: (e as Error).message })
+  }
 })
+
+// ─── Sorteo de carriles automático: al vencer la fecha límite de inscripciones,
+// si aún no hay carriles sorteados, se generan solos (mismo patrón que el
+// auto-sorteo de fixtures en encuentros-service, cada servicio en su dominio) ──
+async function autoSorteoCarriles() {
+  try {
+    const { data: cfg } = await supabaseAdmin
+      .from('configuracion')
+      .select('valor')
+      .eq('clave', 'fecha_limite_inscripciones')
+      .maybeSingle()
+
+    if (!cfg?.valor || new Date() < new Date(cfg.valor)) return
+
+    const { data: existentes } = await supabaseAdmin
+      .from('atletismo_sorteo')
+      .select('participante_id')
+      .limit(1)
+    if (existentes && existentes.length > 0) return   // ya hay sorteo
+
+    const resultado = await generarSorteoCarriles()
+    if (resultado.total > 0) {
+      console.log(`[Auto-carriles] Sorteo de atletismo generado: ${resultado.total} carriles en ${resultado.pruebas} pruebas`)
+    }
+  } catch (err) {
+    console.error('[Auto-carriles] Error:', err)
+  }
+}
+
+setInterval(autoSorteoCarriles, 60 * 1000) // cada minuto
 
 // ─── DELETE /atletismo/sorteo — eliminar sorteo y resultados asociados ──────
 app.delete('/atletismo/sorteo', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
