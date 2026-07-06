@@ -1,0 +1,109 @@
+{
+  "info": {
+    "name": "Olimpiadas SOA — Pruebas de API",
+    "description": "Pruebas de los microservicios: disponibilidad (health checks), endpoints públicos y seguridad RBAC (los endpoints protegidos deben rechazar peticiones sin token o sin el rol adecuado).\n\nRequisito: backend corriendo (`pnpm dev` desde backend/).\n\nAutomatizable por CLI con Newman: `npx newman run olimpiadas-api.postman_collection.json`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Disponibilidad (health checks)",
+      "item": [
+        {
+          "name": "deportes-service /health",
+          "request": { "method": "GET", "url": "http://localhost:3005/health" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('responde 200', () => pm.response.to.have.status(200));",
+            "pm.test('identifica al servicio', () => {",
+            "  pm.expect(pm.response.json().service).to.eql('deportes-service');",
+            "});"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "resultados-service /health",
+          "request": { "method": "GET", "url": "http://localhost:3009/health" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('responde 200', () => pm.response.to.have.status(200));",
+            "pm.test('identifica al servicio', () => {",
+            "  pm.expect(pm.response.json().service).to.eql('resultados-service');",
+            "});"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "notificaciones-service /health",
+          "request": { "method": "GET", "url": "http://localhost:3011/health" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('responde 200', () => pm.response.to.have.status(200));"
+          ], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "2. Endpoints públicos (espectador sin login)",
+      "item": [
+        {
+          "name": "GET /public/posiciones",
+          "request": { "method": "GET", "url": "http://localhost:3009/public/posiciones" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('responde 200 sin autenticación', () => pm.response.to.have.status(200));",
+            "pm.test('devuelve un array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+            "pm.test('responde en menos de 2 segundos', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /public/encuentros",
+          "request": { "method": "GET", "url": "http://localhost:3008/public/encuentros" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('responde 200 sin autenticación', () => pm.response.to.have.status(200));",
+            "pm.test('devuelve un array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "3. Seguridad RBAC (deben RECHAZAR)",
+      "item": [
+        {
+          "name": "GET /notificaciones sin token → 401",
+          "request": { "method": "GET", "url": "http://localhost:3011/notificaciones" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('rechaza sin token (401)', () => pm.response.to.have.status(401));"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /resultados sin token → 401",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:3009/resultados",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"encuentro_id\":\"x\",\"puntos_local\":1,\"puntos_visitante\":0}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('rechaza sin token (401)', () => pm.response.to.have.status(401));"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /equipos/:id/descalificar sin token → 401",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:3006/equipos/00000000-0000-0000-0000-000000000000/descalificar"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('rechaza sin token (401)', () => pm.response.to.have.status(401));"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /usuarios sin token → 401",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:3008/usuarios",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"nombre\":\"hacker\",\"email\":\"x@x.com\",\"password\":\"123456\",\"rol\":\"administrador\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('rechaza creación de usuarios sin token (401)', () => pm.response.to.have.status(401));"
+          ], "type": "text/javascript" } }]
+        }
+      ]
+    }
+  ]
+}

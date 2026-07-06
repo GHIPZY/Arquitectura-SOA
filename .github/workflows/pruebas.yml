@@ -1,0 +1,65 @@
+# Pruebas automatizadas en cada push — CI con GitHub Actions
+name: Pruebas
+
+on:
+  push:
+    branches: [main, feature/auth-login]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend — tests unitarios y tipos
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Tests unitarios (Vitest)
+        run: pnpm test
+
+      - name: Verificación de tipos (TypeScript)
+        run: pnpm exec tsc --noEmit
+
+  backend:
+    name: Backend — tipos de los 8 servicios
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Instalar workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Compilar paquete compartido
+        run: pnpm --filter @deportes/shared build
+
+      - name: Verificación de tipos de todos los servicios
+        run: pnpm --filter "./services/*" exec tsc --noEmit

@@ -35,7 +35,8 @@ const NAME_TO_CODE: Record<string, string> = {
   peru: 'pe',
 }
 
-function toCode(codigo: string): string | null {
+// Exportada para pruebas unitarias
+export function toCode(codigo: string): string | null {
   const lower = codigo.toLowerCase().trim()
   if (lower.length === 2) return lower
   return NAME_TO_CODE[lower] ?? null
