@@ -409,7 +409,7 @@ app.put('/config', requireAuth as any, async (req: AuthenticatedRequest, res: Re
 
 // ── Ciclo de vida del torneo ───────────────────────────────────────────────
 
-// POST /torneo/reiniciar — solo admin. Borra y cuenta nueva para una nueva edición:
+// POST /torneo/reiniciar-Borra y cuenta nueva para una nueva edición:
 // se limpian encuentros, resultados y estadísticas, y los equipos descalificados
 // vuelven a estar habilitados. Los equipos, jugadores y cuentas se conservan.
 app.post('/torneo/reiniciar', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
