@@ -51,7 +51,7 @@ function App() {
       <Route path="/resultados"    element={<AuthGuard><RolGuard roles={['administrador', 'coordinador', 'espectador']}><ResultadosPage /></RolGuard></AuthGuard>} />
       <Route path="/perfil"        element={<AuthGuard><PerfilPage /></AuthGuard>} />
       <Route path="/configuracion" element={<AuthGuard><RolGuard roles={['administrador']}><ConfiguracionPage /></RolGuard></AuthGuard>} />
-      <Route path="/usuarios"      element={<AuthGuard><RolGuard roles={['administrador']}><UsuariosPage /></RolGuard></AuthGuard>} />
+      <Route path="/usuarios"      element={<AuthGuard><RolGuard roles={['administrador', 'coordinador']}><UsuariosPage /></RolGuard></AuthGuard>} />
       <Route path="/posiciones"    element={<AuthGuard><PosicionesPage /></AuthGuard>} />
       <Route path="/estadisticas"  element={<AuthGuard><EstadisticasPage /></AuthGuard>} />
       <Route path="/atletismo"     element={<AuthGuard><AtletismoPage /></AuthGuard>} />

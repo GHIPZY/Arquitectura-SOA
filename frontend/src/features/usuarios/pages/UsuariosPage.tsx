@@ -15,6 +15,7 @@ function getFlag(codigo: string) {
   return PAIS_IMGS[`/src/assets/paises/${codigo.toLowerCase()}.webp`] ?? null
 }
 import { getUsuarios, crearUsuario, eliminarUsuario } from '@/services/usuarios.service'
+import { useCurrentUser } from '@/shared/context/UserContext'
 
 // Reutilizamos el endpoint de grados via deportes-service si existe, si no los leemos de usuarios
 async function getGrados() {
@@ -33,6 +34,8 @@ const ROL_CFG: Record<string, { label: string; cls: string }> = {
 
 export function UsuariosPage() {
   const queryClient = useQueryClient()
+  const { user } = useCurrentUser()
+  const esCoordinador = user?.rol === 'coordinador'
 
   const { data: usuarios = [], isLoading } = useQuery({
     queryKey: ['usuarios-admin'],
@@ -54,13 +57,14 @@ export function UsuariosPage() {
   const [deleting, setDeleting]     = useState(false)
   const [showPass, setShowPass]     = useState(false)
 
+  const rolInicial = esCoordinador ? 'espectador' : 'coordinador'
   const [form, setForm] = useState({
     nombre: '', email: '', password: '',
-    rol: 'coordinador', grado_id: '',
+    rol: rolInicial, grado_id: '',
   })
 
   function resetForm() {
-    setForm({ nombre: '', email: '', password: '', rol: 'coordinador', grado_id: '' })
+    setForm({ nombre: '', email: '', password: '', rol: rolInicial, grado_id: '' })
     setErrorMsg(null)
   }
 
@@ -119,7 +123,12 @@ export function UsuariosPage() {
   const gradosDisponibles = grados.filter(g => !gradosOcupados.has(g.nombre))
 
   return (
-    <MainLayout title="Gestión de acceso" subtitle="Crea y administra las cuentas de coordinadores y espectadores">
+    <MainLayout
+      title={esCoordinador ? 'Mis Alumnos' : 'Gestión de acceso'}
+      subtitle={esCoordinador
+        ? `Crea cuentas de espectador para los estudiantes de tu grado${user?.grado ? ` (${user.grado})` : ''}`
+        : 'Crea y administra las cuentas de coordinadores y espectadores'}
+    >
       <div className="space-y-5">
 
         {/* Mensajes globales */}
@@ -137,7 +146,9 @@ export function UsuariosPage() {
         {/* Header con botón crear */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 text-sm text-muted">
-            <span className="flex items-center gap-1.5"><Users size={14} /> {coordinadores.length} coordinadores</span>
+            {!esCoordinador && (
+              <span className="flex items-center gap-1.5"><Users size={14} /> {coordinadores.length} coordinadores</span>
+            )}
             <span className="flex items-center gap-1.5"><ShieldCheck size={14} /> {espectadores.length} espectadores</span>
           </div>
           <button
@@ -187,6 +198,7 @@ export function UsuariosPage() {
                     </button>
                   </div>
                 </div>
+                {!esCoordinador && (
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-muted">Rol *</label>
                   <select
@@ -198,7 +210,16 @@ export function UsuariosPage() {
                     <option value="espectador">Espectador</option>
                   </select>
                 </div>
-                {form.rol === 'coordinador' && (
+                )}
+                {esCoordinador && (
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-muted">Cuenta a crear</label>
+                    <p className="px-3 py-2.5 text-sm border border-border rounded-xl bg-base text-muted">
+                      Espectador · {user?.grado ?? 'tu grado'}
+                    </p>
+                  </div>
+                )}
+                {!esCoordinador && form.rol === 'coordinador' && (
                   <div className="space-y-1.5 sm:col-span-2">
                     <label className="block text-xs font-semibold text-muted">Grado asignado</label>
                     <select

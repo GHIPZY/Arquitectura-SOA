@@ -16,6 +16,7 @@ const NAV_ITEMS: { icon: React.ElementType | string; label: string; to: string; 
   { icon: Trophy,        label: 'Sorteo',      to: '/sorteo',      roles: ['administrador'] },
   { icon: ClipboardList, label: 'Resultados',  to: '/resultados',  roles: ['administrador', 'coordinador', 'espectador'] },
   { icon: Users,         label: 'Usuarios',    to: '/usuarios',    roles: ['administrador'] },
+  { icon: Users,         label: 'Mis Alumnos', to: '/usuarios',    roles: ['coordinador'] },
   { icon: BarChart2,     label: 'Posiciones',   to: '/posiciones',   roles: ['administrador', 'coordinador', 'espectador'] },
   { icon: TrendingUp,   label: 'Estadísticas', to: '/estadisticas', roles: ['administrador', 'coordinador', 'espectador'] },
 ]

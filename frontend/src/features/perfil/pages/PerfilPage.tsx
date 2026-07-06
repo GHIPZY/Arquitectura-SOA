@@ -225,12 +225,14 @@ export function PerfilPage() {
             </div>
           </div>
 
-          {/* Info de solo lectura — nota */}
-          <div className="p-5 border bg-base border-border rounded-2xl">
-            <p className="text-xs leading-relaxed text-muted">
-              <span className="font-semibold text-text">Nota:</span> El nombre, correo y grado asignado son administrados por el organizador del torneo. Si necesitas actualizar algún dato, comunícate con el administrador.
-            </p>
-          </div>
+          {/* Info de solo lectura — nota (no aplica al propio administrador) */}
+          {user?.rol !== 'administrador' && (
+            <div className="p-5 border bg-base border-border rounded-2xl">
+              <p className="text-xs leading-relaxed text-muted">
+                <span className="font-semibold text-text">Nota:</span> El nombre, correo y grado asignado son administrados por el organizador del torneo. Si necesitas actualizar algún dato, comunícate con el administrador.
+              </p>
+            </div>
+          )}
         </div>
 
       </div>
