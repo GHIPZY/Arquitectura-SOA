@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/encuentros/:path*", "destination": "https://arquitectura-soa-production.up.railway.app/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
