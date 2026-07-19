@@ -1,6 +1,13 @@
 {
   "rewrites": [
     { "source": "/api/encuentros/:path*", "destination": "https://arquitectura-soa-production.up.railway.app/:path*" },
+    { "source": "/api/instituciones/:path*", "destination": "https://intuitive-quietude-production.up.railway.app/:path*" },
+    { "source": "/api/equipos/:path*", "destination": "https://vibrant-blessing-production-4532.up.railway.app/:path*" },
+    { "source": "/api/participantes/:path*", "destination": "https://ideal-eagerness-production-6b36.up.railway.app/:path*" },
+    { "source": "/api/resultados/:path*","destination":"https://giving-luck-production.up.railway.app/:path*"},
+    { "source": "/api/estadisticas/:path*", "destination": "https://luminous-creation-production-1ee2.up.railway.app/:path*" },
+    { "source": "/api/notificaciones/:path*", "destination": "https://motivated-tranquility-production-34a4.up.railway.app/:path*" },
+    { "source": "/api/deportes/:path*", "destination": "https://pleasing-gratitude-production-71ae.up.railway.app/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
